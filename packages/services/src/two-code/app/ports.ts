@@ -12,6 +12,7 @@ export interface EngineEvent {
   text: string;
 }
 export interface EngineRun {
+  connection?: EngineConnection;
   mode?: TwoCodeMode;
   usage?(usage: Omit<RunUsage, "id" | "role">): Promise<void>;
   cwd: string;
@@ -25,6 +26,14 @@ export interface EngineRun {
   permission(title: string, detail: string): Promise<boolean>;
   handoff?: (message: string, block?: boolean) => Promise<string>;
   readSidekick?: () => Promise<string>;
+}
+export interface EngineConnection {
+  baseUrl: string;
+  apiKey: string;
+  authMode?: "token" | "api-key";
+  modelAliases?: Record<string, string>;
+  api: string;
+  providerConfig: Record<string, unknown>;
 }
 export interface EngineReport {
   text: string;
@@ -41,6 +50,7 @@ export interface TaskStore {
   save(task: TwoCodeTask): Promise<void>;
 }
 export interface CoordinatorDependencies {
+  connections?(task: TwoCodeTask): Promise<Partial<Record<"lead" | "sidekick", EngineConnection>>>;
   lease?: {
     isActive(id: string): Promise<boolean>;
     acquire(id: string): Promise<() => Promise<void>>;

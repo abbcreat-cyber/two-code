@@ -50,6 +50,20 @@ export class ClaudeAdapter implements HarnessAdapter {
       ? (input.selection.thinking as Options["effort"])
       : undefined;
     let text = "";
+    const connectionEnv = input.connection?.baseUrl
+      ? {
+          ANTHROPIC_BASE_URL: input.connection.baseUrl,
+          ANTHROPIC_API_KEY: input.connection.authMode === "token" ? "" : input.connection.apiKey,
+          ANTHROPIC_AUTH_TOKEN:
+            input.connection.authMode === "token" ? input.connection.apiKey : "",
+          ...Object.fromEntries(
+            Object.entries(input.connection.modelAliases ?? {}).map(([alias, model]) => [
+              `ANTHROPIC_DEFAULT_${alias.toUpperCase()}_MODEL`,
+              model,
+            ]),
+          ),
+        }
+      : undefined;
     const partialUsage = new Map<
       string,
       {
@@ -83,6 +97,7 @@ export class ClaudeAdapter implements HarnessAdapter {
           ...(effort ? { effort } : {}),
           systemPrompt: { type: "preset", preset: "claude_code", append: input.systemPrompt },
           includePartialMessages: true,
+          ...(connectionEnv ? { settings: { env: connectionEnv } } : {}),
           permissionMode:
             input.mode === "yolo"
               ? "bypassPermissions"
@@ -128,7 +143,7 @@ export class ClaudeAdapter implements HarnessAdapter {
               ? { behavior: "allow", updatedInput: args }
               : { behavior: "deny", message: "用户未批准此操作" };
           },
-          env: { ...process.env, CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: "false" },
+          env: { ...process.env, ...connectionEnv, CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: "false" },
         },
       });
       for await (const message of this.active) {

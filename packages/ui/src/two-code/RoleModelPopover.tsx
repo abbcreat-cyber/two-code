@@ -4,6 +4,13 @@ import type { ActorRole, EngineSelection, HarnessInfo } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.js";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.js";
+import {
   chooseModel,
   modelChoices,
   selectedModelName,
@@ -90,15 +97,16 @@ export function RoleModelPopover({
           <p className="text-ui-base font-medium">{label}设置</p>
           <label className="flex items-center justify-between gap-3 text-ui-caption text-foreground-subtle">
             脚手架
-            <select
-              aria-label={`${label}脚手架`}
-              className="h-8 max-w-48 rounded-lg border border-input-border bg-input px-2 text-ui-base text-foreground"
+            <Select
               disabled={disabled || saving || hasSession}
               value={selection.harness}
-              onChange={(e) => {
-                const next = catalog.find((h) => h.id === e.target.value);
+              onValueChange={(id) => {
+                const next = catalog.find((h) => h.id === id);
                 if (!next) return;
-                const first = next.models[0];
+                const first =
+                  next.models.find(
+                    (m) => m.id === next.defaultModel && m.provider === next.defaultProvider,
+                  ) ?? next.models[0];
                 void save(
                   {
                     harness: next.id,
@@ -110,13 +118,17 @@ export function RoleModelPopover({
                 );
               }}
             >
-              {catalog.map((h) => (
-                <option key={h.id} value={h.id} disabled={!h.available}>
-                  {h.name}
-                  {h.available ? "" : "（未安装）"}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label={`${label}脚手架`} className="max-w-48" size="lg">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {catalog.map((h) => (
+                  <SelectItem key={h.id} value={h.id} disabled={!h.available}>
+                    {h.name}{h.available ? "" : "（未安装）"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           {hasSession && (
             <p className="text-ui-xs text-foreground-subtlest">
@@ -145,6 +157,8 @@ export function RoleModelPopover({
               type="button"
               role="option"
               aria-selected={m.selected}
+              data-model-id={m.selection.model}
+              data-model-provider={m.selection.provider ?? ""}
               title={`${m.connection} · ${m.selection.model ?? "默认"}`}
               disabled={disabled || saving || !m.available}
               className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-menu-hover focus-visible:bg-menu-hover focus-visible:outline-none disabled:opacity-50"
@@ -160,21 +174,30 @@ export function RoleModelPopover({
         </div>
         <label className="flex shrink-0 items-center justify-between gap-3 border-t border-border p-3 text-ui-caption text-foreground-subtle">
           思考档位
-          <select
-            aria-label={`${label}思考档位`}
-            value={selection.thinking ?? ""}
+          <Select
+            value={selection.thinking || "default"}
             disabled={disabled || saving}
-            className="h-8 min-w-28 rounded-lg border border-input-border bg-input px-2 text-ui-base text-foreground"
-            onChange={(e) =>
-              void save({ ...selection, thinking: e.target.value || undefined }, false)
+            onValueChange={(level) =>
+              void save({ ...selection, thinking: level === "default" ? undefined : level }, false)
             }
           >
-            {thinkingOptions(selection).map((level) => (
-              <option key={level} value={level}>
-                {thinkingLabels[level]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label={`${label}思考档位`} className="min-w-32" size="lg">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent
+              position="popper"
+              side="top"
+              align="end"
+              sideOffset={6}
+              className="min-w-36"
+            >
+              {thinkingOptions(selection).map((level) => (
+                <SelectItem key={level} value={level || "default"}>
+                  {thinkingLabels[level]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         {error && (
           <p role="alert" className="px-3 pb-2 text-ui-caption text-destructive">

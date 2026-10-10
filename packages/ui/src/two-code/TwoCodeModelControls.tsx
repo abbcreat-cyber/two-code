@@ -3,14 +3,11 @@ import { GitBranch, ChevronDown, UserRound, UsersRound, Bookmark, Check } from "
 import type { ActorRole, HarnessInfo, TwoCodePreferences, TwoCodeMode } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.js";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog.js";
 import { ConfigSelect } from "@/chat-input-toolbar/display.js";
 import { getZCodeAgentAvailableModes, ZCODE_AGENT_PROVIDER } from "@zcode/shared";
 import { useTabStore } from "@/store/TabStoreProvider.js";
-import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
-import { RoleCard } from "./RoleCard.js";
+import { openHarnessSettings } from "./settingsNavigation.js";
 import { RoleModelPopover } from "./RoleModelPopover.js";
-import { thinkingLabels, selectedModelName } from "./modelChoices.js";
 
 export function TwoCodeModelControls({
   value,
@@ -29,17 +26,10 @@ export function TwoCodeModelControls({
   onSaveDefaults(value: TwoCodePreferences): Promise<void>;
   hasSessions?: Partial<Record<ActorRole, boolean>>;
 }) {
-  const [manage, setManage] = useState<ActorRole | null>(null),
-    [draft, setDraft] = useState(value),
-    [saving, setSaving] = useState(false),
+  const [saving, setSaving] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const openSettings = useTabStore((s) => s.openSettingsTab);
-  const beginManage = (target: ActorRole) => {
-    setDraft(structuredClone(value));
-    setError("");
-    setManage(target);
-  };
   const save = async (next: TwoCodePreferences) => {
     setSaving(true);
     setError("");
@@ -53,7 +43,6 @@ export function TwoCodeModelControls({
       setSaving(false);
     }
   };
-  const roles: ActorRole[] = manage ? [manage] : [];
   return (
     <>
       <ConfigSelect
@@ -201,92 +190,12 @@ export function TwoCodeModelControls({
           disabled={locked || saving}
           hasSession={hasSessions[role]}
           onChange={(selection) => save({ ...value, [role]: selection })}
-          onManage={() => beginManage(role)}
+          onManage={() => {
+            openHarnessSettings(value[role].harness);
+            openSettings();
+          }}
         />
       ))}
-      <Dialog
-        open={manage !== null}
-        onOpenChange={(open) => {
-          if (!open && !saving) setManage(null);
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          <DialogTitle>{`${manage === "lead" ? "主手" : "副手"} · 模型与连接`}</DialogTitle>
-          <DialogDescription>
-            保存后从下一轮生效；更换模型保留当前脚手架的上下文。
-          </DialogDescription>
-          <div className="grid max-h-[65vh] gap-3 overflow-y-auto">
-            {roles.map((role) => (
-              <div key={role} className="min-w-0 space-y-3">
-                <div className="space-y-1 rounded-xl border border-border p-3">
-                  <p className="text-ui-caption text-foreground-subtle">
-                    {role === "lead" ? "主手" : "副手"} ·{" "}
-                    {catalog.find((h) => h.id === draft[role].harness)?.name}
-                  </p>
-                  <p className="break-words text-ui-base">
-                    {selectedModelName(catalog, draft[role])}
-                  </p>
-                  <p className="text-ui-caption text-foreground-subtle">
-                    {draft[role].provider || "本机连接"} · 思考
-                    {thinkingLabels[draft[role].thinking ?? ""] ?? draft[role].thinking}
-                  </p>
-                </div>
-                <details>
-                  <summary className="cursor-pointer rounded-lg px-1 py-2 text-ui-caption text-foreground-subtle">
-                    高级配置
-                  </summary>
-                  <RoleCard
-                    role={role}
-                    selection={draft[role]}
-                    catalog={catalog}
-                    disabled={locked || saving}
-                    harnessLocked={hasSessions[role]}
-                    onChange={(selection) =>
-                      setDraft((before) => ({ ...before, [role]: selection }))
-                    }
-                  />
-                </details>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-2 border-t border-border pt-3">
-            <p className="text-ui-caption text-foreground-subtle">
-              Claude Code、Pi 沿用本机连接与认证。模型目录按脚手架区分，切换时不会自动替换连接。
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setManage(null);
-                setPendingSettingsSectionIntent("modelProvider");
-                openSettings();
-              }}
-            >
-              打开 ZCode 模型与连接设置
-            </Button>
-          </div>
-          {error && (
-            <p role="alert" className="text-ui-caption text-destructive">
-              {error}
-            </p>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled={saving} onClick={() => setManage(null)}>
-              取消
-            </Button>
-            <Button
-              disabled={locked || saving}
-              onClick={() => {
-                void save(draft)
-                  .then(() => setManage(null))
-                  .catch(() => {});
-              }}
-            >
-              {saving ? "保存中…" : "保存"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

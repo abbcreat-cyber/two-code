@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { EngineRun, EngineReport, HarnessAdapter } from "../app/ports.js";
 import { piEntry } from "./paths.js";
 import { ToolBridge, piToolExtension } from "./tool-bridge.js";
+import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -57,6 +58,19 @@ export class PiAdapter implements HarnessAdapter {
     if (input.selection.model) args.push("--model", input.selection.model);
     if (input.selection.thinking) args.push("--thinking", input.selection.thinking);
     let toolEnvironment = {};
+    let connectionEnvironment = {};
+    if (input.connection) {
+      if (!input.selection.provider) throw new Error("请在模型设置中选择Pi连接");
+      const configDir = join(input.sessionDir, "connection");
+      await mkdir(configDir, { recursive: true });
+      await atomicWritePrivateTextFile(
+        join(configDir, "models.json"),
+        JSON.stringify({
+          providers: { [input.selection.provider]: input.connection.providerConfig },
+        }),
+      );
+      connectionEnvironment = { PI_CODING_AGENT_DIR: configDir };
+    }
     {
       this.bridge = new ToolBridge(input);
       await this.bridge.start();
@@ -69,7 +83,12 @@ export class PiAdapter implements HarnessAdapter {
       cwd: input.cwd,
       windowsHide: true,
       stdio: "pipe",
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", ...toolEnvironment },
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        ...toolEnvironment,
+        ...connectionEnvironment,
+      },
     });
     this.failure = undefined;
     this.stderr = "";

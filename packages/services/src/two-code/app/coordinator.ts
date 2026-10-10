@@ -4,7 +4,7 @@ import { Emitter } from "@zcode/rpc";
 import type {
   ActorRole,
   CreateTwoCodeTask,
-  ITwoCodeService,
+  ITwoCodeExecutionService,
   TaskEvent,
   TwoCodeTask,
   TwoCodePreferences,
@@ -22,6 +22,7 @@ import {
 } from "../domain/task.js";
 
 interface ActiveRun {
+  connections?: Awaited<ReturnType<NonNullable<CoordinatorDependencies["connections"]>>>;
   id: string;
   requestId: string;
   abort: AbortController;
@@ -36,7 +37,7 @@ interface ActiveRun {
 const copy = (task: TwoCodeTask): TwoCodeTask => structuredClone(task);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-export class TwoCodeCoordinator implements ITwoCodeService {
+export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   private readonly tasks = new Map<string, TwoCodeTask>();
   private readonly active = new Map<string, ActiveRun>();
   private readonly configuring = new Set<string>();
@@ -75,9 +76,7 @@ export class TwoCodeCoordinator implements ITwoCodeService {
     appendEvent(task, { role, kind, text }, new Date().toISOString());
     this.changes.fire(copy(task));
   }
-  catalog() {
-    return this.deps.catalog();
-  }
+  catalog = () => this.deps.catalog();
   async preferences(): Promise<TwoCodePreferences> {
     return (
       this.deps.preferences?.read() ?? {
@@ -193,6 +192,7 @@ export class TwoCodeCoordinator implements ITwoCodeService {
     }
     this.current(task, run);
     const previous = copy(task);
+    run.connections = await this.deps.connections?.(task);
     task.requestIds.push(run.requestId);
     task.error = undefined;
     task.status = "running";
@@ -261,6 +261,7 @@ export class TwoCodeCoordinator implements ITwoCodeService {
     try {
       const usageId = randomUUID();
       const report = await adapter.run({
+        connection: run.connections?.[role],
         mode: task.mode ?? "build",
         usage: async (usage) => {
           this.current(task, run);

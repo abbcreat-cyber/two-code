@@ -9,9 +9,10 @@ import { JsonTaskStore } from "./json-store.js";
 import { ClaudeAdapter } from "./claude.js";
 import { PiAdapter } from "./pi.js";
 import { ZCodeAdapter } from "./zcode.js";
-import { claudeExecutable, claudeConfiguredModels, piConfiguredModels, piEntry } from "./paths.js";
+import { claudeExecutable, piEntry } from "./paths.js";
 import { TaskLease } from "./task-lease.js";
 import { JsonPreferences } from "./preferences.js";
+import { TwoCodeConnections } from "./connections.js";
 
 export function createTwoCodeService(
   agent: IZCodeAgentService,
@@ -21,7 +22,9 @@ export function createTwoCodeService(
   const root =
     process.env.TWO_CODE_HOME ??
     (process.platform === "win32" ? "D:/Apps/TwoCode/data" : join(homedir(), ".two-code"));
-  const service = new TwoCodeCoordinator({
+  const connections = new TwoCodeConnections(root);
+  const coordinator = new TwoCodeCoordinator({
+    connections: (task) => connections.freeze(task),
     lease: new TaskLease(root),
     store: new JsonTaskStore(join(root, "tasks")),
     sessionRoot: join(root, "sessions"),
@@ -33,13 +36,8 @@ export function createTwoCodeService(
       return resolved;
     },
     catalog: async (): Promise<HarnessInfo[]> => {
-      const [claude, pi, models, claudeModels] = await Promise.all([
-        claudeExecutable(),
-        piEntry(),
-        piConfiguredModels(),
-        claudeConfiguredModels(),
-      ]);
-      return [
+      const [claude, pi] = await Promise.all([claudeExecutable(), piEntry()]);
+      return connections.catalog([
         {
           id: "zcode",
           name: "ZCode",
@@ -52,17 +50,16 @@ export function createTwoCodeService(
           name: "Claude Code",
           available: !!claude,
           detail: claude ? "已检测到本机 CLI，沿用其认证配置" : "未找到 Claude Code CLI",
-          defaultModel: claudeModels[0]?.id,
-          models: claudeModels,
+          models: [],
         },
         {
           id: "pi",
           name: "Pi",
           available: !!pi,
           detail: pi ? "原生 RPC；沿用模型配置，工具按 Pi 默认语义执行" : "未找到 Pi CLI",
-          models,
+          models: [],
         },
-      ];
+      ]);
     },
     createAdapter: (harness) =>
       harness === "claude-code"
@@ -71,6 +68,19 @@ export function createTwoCodeService(
           ? new PiAdapter()
           : new ZCodeAdapter(agent, sessions),
   });
+  const service: ITwoCodeService = Object.assign(coordinator, {
+    modelSettings: () => connections.read(),
+    saveConnection: (input: Parameters<ITwoCodeService["saveConnection"]>[0]) =>
+      connections.save(input),
+    removeConnection: (input: Parameters<ITwoCodeService["removeConnection"]>[0]) =>
+      connections.remove(input),
+    onDidCatalogChange: connections.onDidChange,
+  });
+  const disposeCoordinator = service.dispose.bind(service);
+  service.dispose = async () => {
+    await disposeCoordinator();
+    connections.dispose();
+  };
   if (projectTask) {
     const logger = createServiceLogger("two-code-task-index");
     const signatures = new Map<string, string>();

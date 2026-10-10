@@ -4,6 +4,12 @@ export { ServiceCollection } from "./collection.js";
 export { ITwoCodeService, twoCodeSessionId, twoCodeTaskId } from "./two-code/contract.js";
 export type { TwoCodeMode, RunUsage } from "./two-code/contract.js";
 export type {
+  ConnectionModel,
+  HarnessConnection,
+  ModelSettingsView,
+  SaveHarnessConnection,
+} from "./two-code/contract.js";
+export type {
   ActorRole,
   EngineSelection,
   HarnessId,

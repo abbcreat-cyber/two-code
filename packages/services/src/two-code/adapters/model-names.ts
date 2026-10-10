@@ -51,14 +51,15 @@ export async function readLocalModelRoutes(baseUrl: unknown): Promise<ModelRoute
     return;
   }
 }
-export function nameForModel(id: string, routes: ModelRoutes | undefined, localProxy: boolean) {
+export function nameForModel(
+  id: string,
+  routes: ModelRoutes | undefined,
+  _localProxy: boolean,
+  configuredName?: string,
+) {
   const realModel = routes?.routes[id]?.model;
   return {
-    name: realModel
-      ? modelDisplayName(realModel)
-      : localProxy
-        ? "模型待确认"
-        : modelDisplayName(id),
+    name: realModel ? modelDisplayName(realModel) : configuredName || modelDisplayName(id),
     ...(realModel ? { realModel } : {}),
   };
 }

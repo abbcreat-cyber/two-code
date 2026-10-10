@@ -1,4 +1,8 @@
 import fs from "node:fs/promises";
+import {
+  configureRole as configureRoleWithPage,
+  checkModelSettings,
+} from "./two-code-settings-ui.mjs";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -10,6 +14,13 @@ await fs.mkdir(workspace, { recursive: true });
 await fs.mkdir(path.join(root, "data/tasks"), { recursive: true });
 const preferences = JSON.parse(await fs.readFile("D:/Apps/TwoCode/data/preferences.json", "utf8"));
 preferences.mode = "build";
+preferences.lead = { harness: "claude-code", model: "claude-sonnet-4-8", thinking: "high" };
+preferences.sidekick = {
+  harness: "pi",
+  provider: "ds-tencent",
+  model: "claude-sonnet-4-8",
+  thinking: "high",
+};
 await fs.writeFile(path.join(root, "data/preferences.json"), JSON.stringify(preferences));
 const legacyId = randomUUID(),
   at = new Date().toISOString();
@@ -53,25 +64,7 @@ const app = await electron.launch({
 const errors = [];
 try {
   const page = await app.firstWindow();
-  const configureRole = async (role, changes) => {
-    const label = role === "lead" ? "主手" : "副手";
-    await page.getByTestId(`two-code-${role}-model`).click();
-    await page
-      .getByTestId(`two-code-${role}-panel`)
-      .getByRole("button", { name: "管理模型与连接…" })
-      .click();
-    const dialog = page.getByRole("dialog", { name: `${label} · 模型与连接` });
-    await dialog.locator("summary").click();
-    if (changes.harness)
-      await dialog.getByLabel(`${label}脚手架`, { exact: true }).selectOption(changes.harness);
-    if (changes.provider)
-      await dialog.getByLabel(`${label}提供方`, { exact: true }).fill(changes.provider);
-    if (changes.model) await dialog.getByLabel(`${label}模型`, { exact: true }).fill(changes.model);
-    if (changes.thinking)
-      await dialog.getByLabel(`${label}思考`, { exact: true }).selectOption(changes.thinking);
-    await dialog.getByRole("button", { name: "保存", exact: true }).click();
-    await dialog.waitFor({ state: "hidden" });
-  };
+  const configureRole = (role, changes) => configureRoleWithPage(page, role, changes);
   page.on("pageerror", (e) => errors.push(e.message));
   await page.getByTestId("two-code-native-session").waitFor({ state: "visible", timeout: 30000 });
   await page.getByTestId("two-code-lead-model").waitFor({ state: "visible", timeout: 30000 });
@@ -103,7 +96,7 @@ try {
   const configuredLegacy = JSON.parse(
     await fs.readFile(path.join(root, `data/tasks/${legacyId}.json`), "utf8"),
   );
-  assert.equal(configuredLegacy.lead.selection.model, "sonnet");
+  assert.equal(configuredLegacy.lead.selection.model, "claude-sonnet-4-8");
   assert.equal(configuredLegacy.sidekick.selection.thinking, "medium");
   assert.equal(configuredLegacy.mode, "edit");
   assert.equal((await page.locator("strong").filter({ hasText: "历史记录" }).count()) > 0, true);
@@ -136,7 +129,7 @@ try {
     await page.getByTestId("two-code-lead-model").click();
     const leadPanel = page.getByTestId("two-code-lead-panel");
     await leadPanel.waitFor();
-    assert.equal(await leadPanel.getByLabel("主手脚手架").inputValue(), "claude-code");
+    assert.match(await leadPanel.getByLabel("主手脚手架").innerText(), /Claude Code/);
     await leadPanel.getByLabel("主手搜索模型").fill("DeepSeek");
     assert.equal(
       await leadPanel.getByRole("listbox", { name: "主手模型列表" }).getByRole("option").count(),
@@ -155,13 +148,12 @@ try {
     assert.equal(await leadPanel.getByRole("combobox", { name: "主手思考档位" }).count(), 1);
     await page.screenshot({ animations: "disabled", path: path.join(root, "lead-panel.png") });
     await leadPanel.getByRole("button", { name: "管理模型与连接…" }).click();
-    const roleDialog = page.getByRole("dialog", { name: "主手 · 模型与连接" });
-    await roleDialog.waitFor();
-    assert.equal(await roleDialog.getByLabel("副手模型", { exact: true }).count(), 0);
-    await roleDialog.getByRole("button", { name: "取消", exact: true }).click();
+    await checkModelSettings(page, root);
     await page.getByTestId("two-code-sidekick-model").click();
     const childPanel = page.getByTestId("two-code-sidekick-panel");
-    await childPanel.getByLabel("副手思考档位", { exact: true }).selectOption("medium");
+    await childPanel.getByRole("combobox", { name: "副手思考档位" }).click();
+    await page.screenshot({ animations: "disabled", path: path.join(root, "thinking-menu.png") });
+    await page.getByRole("option", { name: "中", exact: true }).click();
     await page.waitForTimeout(200);
     const childBounds = await childPanel.boundingBox();
     assert(
@@ -309,7 +301,7 @@ try {
     const second = JSON.parse(await fs.readFile(taskPath, "utf8"));
     assert.equal(first.lead.sessionId, second.lead.sessionId);
     assert.equal(first.sidekick.sessionId, second.sidekick.sessionId);
-    assert.equal(second.lead.selection.model, "sonnet");
+    assert.equal(second.lead.selection.model, "claude-sonnet-4-8");
     assert.equal(second.sidekick.selection.thinking, "medium");
     assert(second.usage.length > first.usage.length);
     assert.match(second.lead.lastReport, /青松/);

@@ -1,4 +1,11 @@
 import type { Event } from "@zcode/rpc";
+import type { TwoCodeModelSettingsApi } from "./settings-contract.js";
+export type {
+  ConnectionModel,
+  HarnessConnection,
+  ModelSettingsView,
+  SaveHarnessConnection,
+} from "./settings-contract.js";
 
 export type HarnessId = "zcode" | "claude-code" | "pi";
 export type ActorRole = "lead" | "sidekick";
@@ -35,6 +42,7 @@ export interface HarnessInfo {
   available: boolean;
   detail: string;
   defaultModel?: string;
+  defaultProvider?: string;
   models: Array<{
     id: string;
     provider?: string;
@@ -88,7 +96,7 @@ export interface CreateTwoCodeTask {
   sidekick: EngineSelection;
 }
 export type TwoCodePreferences = Pick<CreateTwoCodeTask, "dual" | "lead" | "sidekick" | "mode">;
-export interface ITwoCodeService {
+export interface ITwoCodeService extends TwoCodeModelSettingsApi {
   catalog(): Promise<HarnessInfo[]>;
   list(workspacePath: string): Promise<TwoCodeTask[]>;
   create(input: CreateTwoCodeTask): Promise<TwoCodeTask>;
@@ -102,5 +110,9 @@ export interface ITwoCodeService {
   onDidChange: Event<TwoCodeTask>;
   dispose(): Promise<void>;
 }
+export type ITwoCodeExecutionService = Omit<
+  ITwoCodeService,
+  "modelSettings" | "saveConnection" | "removeConnection" | "onDidCatalogChange"
+>;
 export const ITwoCodeService: { readonly channelName: string; readonly _brand?: ITwoCodeService } =
   { channelName: "two-code" };

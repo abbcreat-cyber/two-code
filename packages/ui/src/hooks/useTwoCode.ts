@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { HarnessInfo, TwoCodePreferences, TwoCodeTask } from "@zcode/services";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useModelSelectionView } from "@/hooks/useModelSelectionView.js";
 
 const initial: TwoCodePreferences = {
   dual: true,
@@ -13,6 +14,7 @@ export function useTwoCode(
   onCreated?: (id: string) => void,
 ) {
   const service = useWorkspaceServices(workspacePath).twoCodeService;
+  const nativeModels = useModelSelectionView(workspacePath);
   const [catalog, setCatalog] = useState<HarnessInfo[]>([]);
   const [preferences, setPreferences] = useState<TwoCodePreferences>(initial);
   const [tasks, setTasks] = useState<TwoCodeTask[]>([]);
@@ -49,6 +51,16 @@ export function useTwoCode(
         return [task, ...items.filter((item) => item.id !== task.id)];
       });
     });
+    const catalogSubscription = service.onDidCatalogChange(() => {
+      void service
+        .catalog()
+        .then((next) => {
+          if (!disposed) setCatalog(next);
+        })
+        .catch((cause) => {
+          if (!disposed) setError(String(cause));
+        });
+    });
     void Promise.all([service.catalog(), service.preferences(), service.list(workspacePath)])
       .then(([engines, defaults, saved]) => {
         if (!disposed) {
@@ -69,6 +81,7 @@ export function useTwoCode(
     return () => {
       disposed = true;
       subscription.dispose();
+      catalogSubscription.dispose();
     };
   }, [service, workspacePath]);
   const submit = async (text: string) => {
@@ -116,7 +129,20 @@ export function useTwoCode(
     }
   };
   return {
-    catalog,
+    catalog: catalog.map((h) =>
+      h.id === "zcode" && nativeModels.state.status === "ready"
+        ? {
+            ...h,
+            defaultModel: nativeModels.state.view.preferredSelection?.modelId,
+            defaultProvider: nativeModels.state.view.preferredSelection?.providerId,
+            models: nativeModels.state.view.providers
+              .filter((p) => !!p.config.api?.type)
+              .flatMap((p) =>
+                p.models.map((m) => ({ id: m.modelId, provider: p.providerId, name: m.modelId })),
+              ),
+          }
+        : h,
+    ),
     preferences,
     setPreferences,
     tasks,

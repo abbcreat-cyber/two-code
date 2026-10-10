@@ -8,7 +8,9 @@ UI重开先读快照再消费单调序号变化。Host重启将未完成任务�
 
 技术端口和验收见specs/two-code/multi-harness.md。
 
-catalog模型项允许携带aliases和realModel。展示优先使用已解析目录名称，旧别名匹配到同一候选项；真实请求ID、provider及已有sessionId不因改名而修改。本机代理的上游名称仅从所配置loopback网关的只读路由元数据获取，不探测远程API；读取失败或路由不明时显示“模型待确认”。
+catalog模型项允许携带aliases和realModel。展示优先使用已解析目录名称，旧别名匹配到同一候选项；真实请求ID、provider及已有sessionId不因改名而修改。本机代理的上游名称仅从所配置loopback网关的只读路由元数据获取，不探测远程API；读取失败或路由不明时保留配置名称或请求ID，核验状态仅在管理页显示。
+
+modelSettings/saveConnection/removeConnection及onDidCatalogChange由同一Host的TwoCodeConnections持有。原生文件只读，覆盖配置私有保存，revision防止过期覆盖。公共响应不包含密钥，空密钥保留旧值；运行准入冻结两角色连接，下次运行使用最新设置。统一管理入口复用原生模型设置页面。
 
 TaskEvent.reasoning是脚手架实际返回的思考文本增量；空串仅表示当前思考块结束。Claude/Pi消费thinking_delta，ZCode消费原生model.streaming(reasoning_delta)。不生成替代思考，不合并到回答正文。UI投影为原生ReasoningRow，折叠与显示设置由原ZCode组件处理。sessionId持久化后立即广播，订阅者无需等第一段正文才能观察会话身份。
 
