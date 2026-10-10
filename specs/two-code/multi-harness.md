@@ -168,6 +168,21 @@ sequenceDiagram
 - 两组源码后台小任务全部通过：`D:/Apps/TwoCode/qa/small-battery-1791647044659`（任务错误与默认提示隔离）、`D:/Apps/TwoCode/qa/small-battery-1791647067147`（非阻塞派工、权限等待停止及续接）；renderer错误均为空。固定GLM-5.3 max主手、腾讯DeepSeek V4.1 Flash high副手。
 - 0.7.4安装包再次通过非阻塞派工、任务错误隔离及切回后真实重试、默认保存提示隔离，证据`D:/Apps/TwoCode/qa/small-battery-1791647210238`；renderer错误为空。真实数据的6个已有任务可打开，窗口位于屏幕外且不可聚焦。桌面入口更新到`D:/Apps/TwoCode/releases/0.7.4/win-unpacked/Two Code.exe`，旧版及升级前备份保留。
 
+0.7.5 行为约束：
+
+- 发送成功只清除本次提交来源及实际创建任务的匹配草稿，不能按文本相同去清除其他任务草稿。新任务创建回包只携带提交时冻结的正文；用户已经切走或编辑新正文时不抢回原任务。
+- 启动准入期间停止后，不再启动模型、不广播回退到running；持有执行租约时将本轮用户请求和取消终态一起保存，重开仍可见，续聊只在用户再次发送后发生。未获得租约不能改写其他窗口的快照。取消保存失败仍报错，不能伪称已持久化。
+- 顺序：冻结正文和来源 → 创建/提交 → 对应任务确认 → 仅清理原身份的匹配草稿。启动顺序：获取租约 → 读最新快照 → 读取配置 → 检查取消 → 保存准入 → 检查取消 → 启动模型；任意启动等待期间取消由准入流程在租约内保存取消终态。
+
+0.7.5 验收记录（2026-10-11）：
+
+- 0.7.4安装包在受控延迟下复现两项前端缺陷：发送确认晚到会删除其他任务的相同文本草稿（`D:/Apps/TwoCode/qa/small-battery-1791648275163`）；创建回包晚到会抢回页面并复制别处草稿（`small-battery-1791648360468`）。延迟仅注入隔离QA的对应RPC回包，模型请求仍走真实配置。
+- 底座五个准入等待点的受控测试中，原版四项失败：租约/读取期间取消未正常保存；连接/目录读取期间取消后仍广播running。修复后的五个等待点均可保存cancelled且不启动模型，显式下一轮可继续；另覆盖租约、读取、保存失败不被取消吞掉，不写未成功读取的旧快照。
+- 29项定向回归通过；typecheck、lint（71个既有warning、0 error）及架构检查通过。准入事务移至同层app/admission.ts，由Coordinator继续持有执行状态与租约。
+- 源码真实验收：`D:/Apps/TwoCode/qa/small-battery-1791648475628`中的same-text-draft-race通过；`small-battery-1791648540328`的late-create-navigation通过；`small-battery-1791648486133`的非阻塞派工、失败重试、权限停止及续接全部通过。renderer错误均为空，主副手保持GLM-5.3 max与腾讯DeepSeek V4.1 Flash high。
+- 初版延迟脚本暂停全部入站消息导致新任务导航无法完成，已改为仅暂停目标方法回包；另一处脚本在创建后的idle阶段过早断言完成，已改为等待提交准入。这两次测试脚本问题不计作产品缺陷。
+- 0.7.5安装包的两项延迟场景复测均通过，证据`D:/Apps/TwoCode/qa/small-battery-1791648664887`，renderer错误为空；真实数据的6个已有任务可打开。桌面入口为`D:/Apps/TwoCode/releases/0.7.5/win-unpacked/Two Code.exe`，升级前备份排除共享OAuth目录，旧版保留。
+
 ## 官方思考档位
 
 - 删除“默认”，档位按真实模型及版本查固定表，不再按脚手架展示通用档位。当前预置GPT-6 Astra/6.1 Sol/6 Sol/6 Luna、GLM-5.3/5.3-Flash、DeepSeek V4.1 Flash、MiMo V2.6 Pro/Flash；依据和日期见official-thinking-levels.md。

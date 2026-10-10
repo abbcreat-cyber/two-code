@@ -16,7 +16,7 @@ const initial: TwoCodePreferences = {
 export function useTwoCode(
   workspacePath: string,
   activeId: string | null,
-  onCreated?: (id: string) => void,
+  onCreated?: (id: string, text: string) => void,
 ) {
   const service = useWorkspaceServices(workspacePath).twoCodeService;
   const nativeModels = useModelSelectionView(workspacePath);
@@ -135,7 +135,7 @@ export function useTwoCode(
         const task = await service.create({ ...preferences, workspacePath });
         id = task.id;
         clearSubmittedDraftPreferences(localStorage, draftPreferenceKey, preferences);
-        onCreated?.(id);
+        onCreated?.(id, text);
         upsert(task);
       }
       setCommandError(id);
@@ -147,6 +147,7 @@ export function useTwoCode(
       pendingRequest.current = request;
       upsert(await service.submit(request));
       pendingRequest.current = null;
+      return id;
     } catch (cause) {
       // 新建后的发送失败属于已创建任务；异步回包不能污染用户切换后的视图。
       setCommandError(id, cause);

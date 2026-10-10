@@ -13,7 +13,7 @@ import type { CoordinatorDependencies, EngineReport } from "./ports.js";
 import type { ActiveRun } from "./active-run.js";
 import { parsePreferences } from "../domain/snapshot.js";
 import { permissionDecision } from "./permission-policy.js";
-import { normalizeTaskThinking } from "../domain/thinking.js";
+import { admitTask } from "./admission.js";
 import {
   appendEvent,
   leadInstruction,
@@ -150,7 +150,14 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       permissions: new Map(),
     };
     this.active.set(task.id, run);
-    run.admission = this.admit(task, run, input.text);
+    run.admission = admitTask(
+      this.deps,
+      task,
+      run,
+      input.text,
+      () => this.current(task, run),
+      () => this.changes.fire(copy(task)),
+    );
     try {
       await run.admission;
     } catch (error) {
@@ -159,38 +166,13 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       this.changes.fire(copy(task));
       throw error;
     }
-    if (run.duplicate) {
+    if (run.duplicate || run.abort.signal.aborted) {
       this.active.delete(task.id);
       await run.release?.();
       return copy(task);
     }
     run.work = this.runLead(task, run, input.text);
     return copy(task);
-  }
-  private async admit(task: TwoCodeTask, run: ActiveRun, text: string): Promise<void> {
-    run.release = await this.deps.lease?.acquire(task.id);
-    const latest = await this.deps.store.read?.(task.id);
-    if (latest) Object.assign(task, latest);
-    if (task.requestIds.includes(run.requestId)) {
-      run.duplicate = true;
-      return;
-    }
-    this.current(task, run);
-    const previous = copy(task);
-    run.connections = await this.deps.connections?.(task);
-    normalizeTaskThinking(task, await this.catalog());
-    task.requestIds.push(run.requestId);
-    task.error = undefined;
-    task.status = "running";
-    if (task.title === "新任务") task.title = text.trim().slice(0, 50);
-    appendEvent(task, { role: "user", kind: "message", text }, new Date().toISOString());
-    try {
-      await this.deps.store.save(task);
-    } catch (error) {
-      Object.assign(task, previous);
-      throw error;
-    }
-    this.changes.fire(copy(task));
   }
   private current(task: TwoCodeTask, run: ActiveRun): void {
     if (run.abort.signal.aborted || this.active.get(task.id) !== run) {
@@ -382,8 +364,11 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     for (const resolve of run.permissions.values()) resolve(false);
     run.permissions.clear();
     task.permissions = [];
-    task.status = "cancelled";
-    this.emit(task, "system", "status", "正在停止主手与副手");
+    // 启动阶段由准入事务在读完最新快照后写取消；提前改内存会被迟到读取覆盖。
+    if (run.work) {
+      task.status = "cancelled";
+      this.emit(task, "system", "status", "正在停止主手与副手");
+    }
     await run.admission?.catch(() => undefined);
     await Promise.allSettled([...run.actors.values()].map((adapter) => adapter.cancel()));
     await run.work;

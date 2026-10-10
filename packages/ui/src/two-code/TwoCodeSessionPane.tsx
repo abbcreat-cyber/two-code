@@ -20,13 +20,15 @@ import { useSettings } from "@/hooks/useSettingService.js";
 
 export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => void }) {
   const id = twoCodeTaskId(props.sessionId);
-  const state = useTwoCode(props.workspacePath, id, (created) => {
+  const state = useTwoCode(props.workspacePath, id, (created, submittedText) => {
     const nextId = twoCodeSessionId(created);
     localStorage.setItem(
       `two-code:composer:${props.workspaceIdentity || props.workspacePath}:${nextId}`,
-      input.current?.getMarkdown() ?? "",
+      submittedText,
     );
-    props.onSessionCreated?.(nextId);
+    // 创建回包只属于发送时的草稿；切走或改写正文后不能抢回页面、复制别处输入。
+    if (draftKeyRef.current === draftKey && input.current?.getMarkdown() === submittedText)
+      props.onSessionCreated?.(nextId);
   });
   const task = state.task,
     busy = task?.status === "running";
@@ -81,10 +83,14 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     setSending(true);
     void state
       .submit(value)
-      .then(() => {
-        if (localStorage.getItem(draftKey) === value) localStorage.removeItem(draftKey);
-        if (input.current?.getMarkdown() === value) {
-          localStorage.removeItem(draftKeyRef.current);
+      .then((submittedId) => {
+        if (!submittedId) return;
+        const submittedKey = `two-code:composer:${props.workspaceIdentity || props.workspacePath}:${twoCodeSessionId(submittedId)}`;
+        const keys = [draftKey, submittedKey];
+        for (const key of keys)
+          if (localStorage.getItem(key) === value) localStorage.removeItem(key);
+        // 文本相同不等于同一草稿，必须同时核对来源/已创建任务身份。
+        if (keys.includes(draftKeyRef.current) && input.current?.getMarkdown() === value) {
           setText("");
           input.current.setText("");
         }
