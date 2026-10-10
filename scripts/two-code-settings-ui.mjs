@@ -8,7 +8,12 @@ export async function configureRole(page, role, changes) {
   const panel = page.getByTestId(`two-code-${role}-panel`);
   if (changes.harness) {
     await panel.getByRole("combobox", { name: `${label}脚手架` }).click();
-    await page.getByRole("option", { name: { pi: "Pi", "claude-code": "Claude Code", zcode: "ZCode" }[changes.harness], exact: true }).click();
+    await page
+      .getByRole("option", {
+        name: { pi: "Pi", "claude-code": "Claude Code", zcode: "ZCode" }[changes.harness],
+        exact: true,
+      })
+      .click();
   }
   if (changes.model) {
     const id = changes.model === "sonnet" ? "claude-sonnet-4-8" : changes.model;
@@ -36,9 +41,21 @@ export async function checkModelSettings(page, root) {
   const editor = page.getByTestId("two-code-connection-editor");
   await editor.waitFor();
   assert.equal(await editor.getByLabel("API 密钥", { exact: true }).inputValue(), "");
+  await editor.getByRole("button", { name: "修改连接名称", exact: true }).click();
+  assert.equal(
+    await editor
+      .getByLabel("连接名称", { exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true,
+  );
   await editor.getByLabel("连接名称", { exact: true }).fill("Claude Code · QA");
   await editor.getByRole("button", { name: "保存", exact: true }).click();
   await editor.getByText("已保存，下一轮任务生效", { exact: true }).waitFor();
+  await editor.getByRole("heading", { name: /Claude Code · QA/ }).waitFor();
+  await settings
+    .getByRole("navigation", { name: "模型连接" })
+    .getByRole("button", { name: /Claude Code · QA/ })
+    .waitFor();
   await page.screenshot({ animations: "disabled", path: path.join(root, "settings-claude.png") });
   await page.getByTestId("two-code-settings-pi").click();
   await settings
@@ -48,6 +65,10 @@ export async function checkModelSettings(page, root) {
   await editor.getByLabel("连接名称", { exact: true }).fill("Pi · QA");
   await editor.getByRole("button", { name: "保存", exact: true }).click();
   await editor.getByText("已保存，下一轮任务生效", { exact: true }).waitFor();
+  if (process.env.TWO_CODE_QA_PROBE_LIVE === "1") {
+    await editor.getByRole("button", { name: "测试连接", exact: true }).first().click();
+    await editor.getByRole("button", { name: "已连通", exact: true }).waitFor({ timeout: 25000 });
+  }
   await page.screenshot({ animations: "disabled", path: path.join(root, "settings-pi.png") });
   await settings.getByRole("button", { name: "新增连接", exact: true }).click();
   await editor.getByLabel("连接名称", { exact: true }).fill("UI 验收连接");
@@ -58,6 +79,9 @@ export async function checkModelSettings(page, root) {
   await editor.getByRole("button", { name: "保存", exact: true }).click();
   await editor.getByText("已保存，下一轮任务生效", { exact: true }).waitFor();
   assert.equal(await editor.getByLabel("API 密钥", { exact: true }).inputValue(), "");
+  await editor.getByRole("button", { name: "测试连接", exact: true }).click();
+  await editor.getByRole("button", { name: "无法连通", exact: true }).waitFor({ timeout: 25000 });
+  await page.screenshot({ animations: "disabled", path: path.join(root, "connection-failed.png") });
   await page.getByTestId("settings-back-button").click();
   await page.getByTestId("two-code-sidekick-model").click();
   const panel = page.getByTestId("two-code-sidekick-panel");

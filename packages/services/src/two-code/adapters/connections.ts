@@ -14,6 +14,7 @@ import type {
 import type { EngineConnection } from "../app/ports.js";
 import { nativeConnections, type PrivateConnection } from "./native-connections.js";
 import { nameForModel, readLocalModelRoutes } from "./model-names.js";
+import { probeConnection } from "./connection-probe.js";
 const model = z
   .object({
     id: z.string().trim().min(1).max(300),
@@ -102,6 +103,13 @@ export class TwoCodeConnections {
   }
   async read() {
     return this.visible(await this.state());
+  }
+  async test(input: { id: string; revision: string; modelId: string }) {
+    const state = await this.state();
+    if (input.revision !== state.revision) throw new Error("设置已更新，请刷新后重试");
+    const c = (await this.all(state)).find((entry) => entry.id === input.id);
+    if (!c || !c.models.some((m) => m.id === input.modelId)) throw new Error("连接或模型已移除");
+    return probeConnection(c, input.modelId);
   }
   async save(input: SaveHarnessConnection): Promise<ModelSettingsView> {
     await withFileLock(this.file, async () => {

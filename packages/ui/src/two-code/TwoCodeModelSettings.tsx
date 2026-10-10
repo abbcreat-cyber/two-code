@@ -158,6 +158,7 @@ export function TwoCodeModelSettings({
                   connection={current}
                   revision={state.view.revision}
                   isNew={!!creating}
+                  onTest={(modelId) => state.test(current.id, state.view!.revision, modelId)}
                   onSave={async (input) => {
                     const view = await state.save(input);
                     setCreating(undefined);

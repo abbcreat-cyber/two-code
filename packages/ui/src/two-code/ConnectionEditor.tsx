@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { Plus, Trash2, Save, KeyRound } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Trash2, Save, KeyRound, Pencil } from "lucide-react";
+import { ConnectionStatus } from "./ConnectionStatus.js";
 import type { HarnessConnection, ModelSettingsView, SaveHarnessConnection } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
@@ -16,13 +17,16 @@ export function ConnectionEditor({
   isNew,
   onSave,
   onRemove,
+  onTest,
 }: {
   connection: HarnessConnection;
   revision: string;
   isNew?: boolean;
   onSave(input: SaveHarnessConnection): Promise<ModelSettingsView>;
   onRemove(id: string, revision: string): Promise<ModelSettingsView>;
+  onTest(modelId: string): Promise<{ ok: boolean; message: string }>;
 }) {
+  const nameInput = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(connection),
     [base, setBase] = useState(revision),
     [key, setKey] = useState(""),
@@ -60,7 +64,21 @@ export function ConnectionEditor({
     <div className="space-y-6" data-testid="two-code-connection-editor">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-ui-lg font-semibold">{isNew ? "新增连接" : connection.name}</h3>
+          <h3 className="flex items-center gap-2 text-ui-lg font-semibold">
+            <span className="break-all">{draft.name || "连接名称"}</span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="修改连接名称"
+              disabled={saving}
+              onClick={() => {
+                nameInput.current?.focus();
+                nameInput.current?.select();
+              }}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+          </h3>
           <p className="mt-1 text-ui-caption text-foreground-subtle">
             {connection.source === "native" && !isNew
               ? "已读取本机配置，保存的更改仅用于 Two Code"
@@ -77,6 +95,7 @@ export function ConnectionEditor({
           连接名称
           <Input
             aria-label="连接名称"
+            ref={nameInput}
             value={draft.name}
             onChange={(e) => update({ name: e.target.value })}
           />
@@ -150,7 +169,7 @@ export function ConnectionEditor({
               <tr>
                 <th className="px-3 py-2 font-medium">模型 ID</th>
                 <th className="px-3 py-2 font-medium">模型名称</th>
-                <th className="whitespace-nowrap px-3 py-2 font-medium">名称来源</th>
+                <th className="whitespace-nowrap px-3 py-2 font-medium">名称与连接状态</th>
                 <th className="w-9" />
               </tr>
             </thead>
@@ -188,7 +207,12 @@ export function ConnectionEditor({
                     />
                   </td>
                   <td className="whitespace-nowrap px-3 text-ui-xs text-foreground-subtle">
-                    {m.realModel ? "上游已核验" : "配置名称"}
+                    <ConnectionStatus
+                      key={`${revision}:${dirty}:${m.id}`}
+                      verified={!!m.realModel && !dirty}
+                      disabled={saving || dirty || !!isNew}
+                      onTest={() => onTest(m.id)}
+                    />
                   </td>
                   <td className="p-2">
                     <Button
@@ -228,7 +252,7 @@ export function ConnectionEditor({
       {!isNew && (
         <div className="flex items-center gap-3 border-t border-border pt-4">
           <Button
-            variant={confirmDelete ? "destructive" : "ghost"}
+            variant="destructive"
             size="sm"
             disabled={saving}
             onClick={async () => {

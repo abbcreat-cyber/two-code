@@ -33,5 +33,10 @@ export interface TwoCodeModelSettingsApi {
   modelSettings(): Promise<ModelSettingsView>;
   saveConnection(input: SaveHarnessConnection): Promise<ModelSettingsView>;
   removeConnection(input: { id: string; revision: string }): Promise<ModelSettingsView>;
+  testConnection(input: {
+    id: string;
+    revision: string;
+    modelId: string;
+  }): Promise<{ ok: boolean; message: string }>;
   onDidCatalogChange: Event<void>;
 }

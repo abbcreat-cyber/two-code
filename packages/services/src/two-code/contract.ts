@@ -112,7 +112,7 @@ export interface ITwoCodeService extends TwoCodeModelSettingsApi {
 }
 export type ITwoCodeExecutionService = Omit<
   ITwoCodeService,
-  "modelSettings" | "saveConnection" | "removeConnection" | "onDidCatalogChange"
+  "modelSettings" | "saveConnection" | "removeConnection" | "testConnection" | "onDidCatalogChange"
 >;
 export const ITwoCodeService: { readonly channelName: string; readonly _brand?: ITwoCodeService } =
   { channelName: "two-code" };

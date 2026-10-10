@@ -75,6 +75,8 @@ export function createTwoCodeService(
     removeConnection: (input: Parameters<ITwoCodeService["removeConnection"]>[0]) =>
       connections.remove(input),
     onDidCatalogChange: connections.onDidChange,
+    testConnection: (input: Parameters<ITwoCodeService["testConnection"]>[0]) =>
+      connections.test(input),
   });
   const disposeCoordinator = service.dispose.bind(service);
   service.dispose = async () => {

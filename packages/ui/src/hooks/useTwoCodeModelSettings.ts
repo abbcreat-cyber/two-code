@@ -30,6 +30,10 @@ export function useTwoCodeModelSettings() {
     catalog,
     error,
     refresh,
+    test: async (id: string, revision: string, modelId: string) => {
+      if (!service) throw new Error("模型设置服务不可用");
+      return service.testConnection({ id, revision, modelId });
+    },
     save: async (input: SaveHarnessConnection) => {
       if (!service) throw new Error("模型设置服务不可用");
       const next = await service.saveConnection(input);

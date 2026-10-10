@@ -16,6 +16,11 @@ export async function renameConnection(service: ITwoCodeService, id: string, nam
   return service.saveConnection({ revision: view.revision, connection: { ...connection, name } });
 }
 
+export async function testSavedModel(service: ITwoCodeService, id: string, modelId: string) {
+  const view = await service.modelSettings();
+  return service.testConnection({ id, modelId, revision: view.revision });
+}
+
 export async function changeIdleModel(service: ITwoCodeService, taskId: string, model: string) {
   const task = await service.read(taskId);
   return service.configure({

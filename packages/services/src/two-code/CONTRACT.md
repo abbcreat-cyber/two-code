@@ -8,6 +8,8 @@ UI重开先读快照再消费单调序号变化。Host重启将未完成任务�
 
 技术端口和验收见specs/two-code/multi-harness.md。
 
+testConnection校验已保存连接及revision，用一次有界模型请求检测当前认证和响应；仅返回ok/message，不返回服务端错误正文或凭据。名称核验与请求连通性独立，UI不把路由元数据当成连通证据。
+
 catalog模型项允许携带aliases和realModel。展示优先使用已解析目录名称，旧别名匹配到同一候选项；真实请求ID、provider及已有sessionId不因改名而修改。本机代理的上游名称仅从所配置loopback网关的只读路由元数据获取，不探测远程API；读取失败或路由不明时保留配置名称或请求ID，核验状态仅在管理页显示。
 
 modelSettings/saveConnection/removeConnection及onDidCatalogChange由同一Host的TwoCodeConnections持有。原生文件只读，覆盖配置私有保存，revision防止过期覆盖。公共响应不包含密钥，空密钥保留旧值；运行准入冻结两角色连接，下次运行使用最新设置。统一管理入口复用原生模型设置页面。
