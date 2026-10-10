@@ -104,7 +104,7 @@ export function ConnectionEditor({
           接口格式
           <Select
             value={draft.api}
-            disabled={draft.harness === "claude-code" || saving}
+            disabled={draft.harness === "claude-code" || !!connection.authentication || saving}
             onValueChange={(api) => update({ api: api as HarnessConnection["api"] })}
           >
             <SelectTrigger aria-label="接口格式" className="w-full">
@@ -121,30 +121,38 @@ export function ConnectionEditor({
           API 地址
           <Input
             aria-label="API 地址"
+            disabled={!!connection.authentication}
             placeholder="https://…"
             value={draft.baseUrl}
             onChange={(e) => update({ baseUrl: e.target.value })}
           />
         </label>
-        <label className="space-y-2 text-ui-caption text-foreground-subtle sm:col-span-2">
-          <span className="inline-flex items-center gap-2">
-            <KeyRound className="size-3.5" />
-            API 密钥{connection.hasApiKey && <span className="text-ui-xs">· 已保存</span>}
-          </span>
-          <Input
-            type="password"
-            aria-label="API 密钥"
-            autoComplete="new-password"
-            value={key}
-            placeholder={
-              connection.hasApiKey ? "留空保留已保存的密钥" : "使用本机登录或无密钥服务时可留空"
-            }
-            onChange={(e) => {
-              setKey(e.target.value);
-              setDirty(true);
-            }}
-          />
-        </label>
+        {connection.authentication === "chatgpt" ? (
+          <div className="rounded-lg border border-border bg-surface p-3 text-ui-caption text-foreground-subtle sm:col-span-2">
+            <p className="font-medium text-foreground">ChatGPT 套餐授权</p>
+            <p className="mt-1">使用已保存的登录授权，由 Pi 自动刷新；请求通过本机代理发送。</p>
+          </div>
+        ) : (
+          <label className="space-y-2 text-ui-caption text-foreground-subtle sm:col-span-2">
+            <span className="inline-flex items-center gap-2">
+              <KeyRound className="size-3.5" />
+              API 密钥{connection.hasApiKey && <span className="text-ui-xs">· 已保存</span>}
+            </span>
+            <Input
+              type="password"
+              aria-label="API 密钥"
+              autoComplete="new-password"
+              value={key}
+              placeholder={
+                connection.hasApiKey ? "留空保留已保存的密钥" : "使用本机登录或无密钥服务时可留空"
+              }
+              onChange={(e) => {
+                setKey(e.target.value);
+                setDirty(true);
+              }}
+            />
+          </label>
+        )}
       </fieldset>
       <section className="space-y-3">
         <div className="flex items-center justify-between">

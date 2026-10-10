@@ -6,6 +6,7 @@ import type { EngineRun, EngineReport, HarnessAdapter } from "../app/ports.js";
 import { piEntry } from "./paths.js";
 import { ToolBridge, piToolExtension } from "./tool-bridge.js";
 import { atomicWritePrivateTextFile } from "@zcode/shared/node";
+import { subscriptionEnvironment } from "./chatgpt-subscription.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -54,12 +55,17 @@ export class PiAdapter implements HarnessAdapter {
       "--no-approve",
     ];
     if (input.sessionId) args.push("--session", input.sessionId);
-    if (input.selection.provider) args.push("--provider", input.selection.provider);
+    if (input.selection.provider)
+      args.push("--provider", input.connection?.subscription ? "openai" : input.selection.provider);
     if (input.selection.model) args.push("--model", input.selection.model);
     if (input.selection.thinking) args.push("--thinking", input.selection.thinking);
     let toolEnvironment = {};
     let connectionEnvironment = {};
-    if (input.connection) {
+    if (input.connection?.subscription) {
+      // 共用专属授权目录，Pi原生文件锁负责刷新；角色session仍保持独立。
+      connectionEnvironment = subscriptionEnvironment(input.connection.subscription);
+      args.unshift("--use-env-proxy");
+    } else if (input.connection) {
       if (!input.selection.provider) throw new Error("请在模型设置中选择Pi连接");
       const configDir = join(input.sessionDir, "connection");
       await mkdir(configDir, { recursive: true });
@@ -79,17 +85,21 @@ export class PiAdapter implements HarnessAdapter {
       args.push("--extension", extension);
       toolEnvironment = this.bridge.environment;
     }
-    this.child = spawn(process.env.TWO_CODE_NODE ?? process.execPath, args, {
-      cwd: input.cwd,
-      windowsHide: true,
-      stdio: "pipe",
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
-        ...toolEnvironment,
-        ...connectionEnvironment,
+    this.child = spawn(
+      input.connection?.subscription?.node ?? process.env.TWO_CODE_NODE ?? process.execPath,
+      args,
+      {
+        cwd: input.cwd,
+        windowsHide: true,
+        stdio: "pipe",
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: "1",
+          ...toolEnvironment,
+          ...connectionEnvironment,
+        },
       },
-    });
+    );
     this.failure = undefined;
     this.stderr = "";
     this.buffer = "";

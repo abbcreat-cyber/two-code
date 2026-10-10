@@ -28,6 +28,7 @@ export interface EngineRun {
   readSidekick?: () => Promise<string>;
 }
 export interface EngineConnection {
+  subscription?: { agentDir: string; node: string; proxy: string };
   baseUrl: string;
   apiKey: string;
   authMode?: "token" | "api-key";

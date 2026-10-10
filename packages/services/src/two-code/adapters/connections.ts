@@ -15,6 +15,11 @@ import type { EngineConnection } from "../app/ports.js";
 import { nativeConnections, type PrivateConnection } from "./native-connections.js";
 import { nameForModel, readLocalModelRoutes } from "./model-names.js";
 import { probeConnection } from "./connection-probe.js";
+import {
+  readChatGPTConnection,
+  probeSubscription,
+  subscriptionSchema,
+} from "./chatgpt-subscription.js";
 const model = z
   .object({
     id: z.string().trim().min(1).max(300),
@@ -26,6 +31,7 @@ const model = z
   })
   .passthrough();
 const connection = z.object({
+  subscription: subscriptionSchema.optional(),
   id: z.string().min(1).max(300),
   harness: z.enum(["claude-code", "pi"]),
   provider: z.string().max(300),
@@ -51,7 +57,7 @@ export class TwoCodeConnections {
   }
   private readonly file: string;
   constructor(
-    root: string,
+    private readonly root: string,
     private readonly imports = nativeConnections,
   ) {
     this.file = join(root, "model-connections.json");
@@ -68,6 +74,16 @@ export class TwoCodeConnections {
   private async all(state: State) {
     const entries = new Map((await this.imports()).map((c) => [c.id, c]));
     for (const c of state.connections) entries.set(c.id, c);
+    const subscription = await readChatGPTConnection(this.root);
+    if (subscription) {
+      const saved = entries.get(subscription.id);
+      entries.set(subscription.id, {
+        ...saved,
+        ...subscription,
+        name: saved?.name ?? subscription.name,
+        models: saved?.models ?? subscription.models,
+      });
+    }
     return [...entries.values()].filter((c) => !state.deleted.includes(c.id));
   }
   private async visible(state: State): Promise<ModelSettingsView> {
@@ -85,9 +101,11 @@ export class TwoCodeConnections {
             baseUrl: c.baseUrl,
             api: c.api,
             hasApiKey: !!c.apiKey,
-            source: state.connections.some((saved) => saved.id === c.id)
-              ? ("two-code" as const)
-              : ("native" as const),
+            authentication: c.subscription ? ("chatgpt" as const) : undefined,
+            source:
+              c.subscription || state.connections.some((saved) => saved.id === c.id)
+                ? ("two-code" as const)
+                : ("native" as const),
             models: c.models.map((m) => ({
               id: m.id,
               aliases: m.aliases,
@@ -109,7 +127,7 @@ export class TwoCodeConnections {
     if (input.revision !== state.revision) throw new Error("设置已更新，请刷新后重试");
     const c = (await this.all(state)).find((entry) => entry.id === input.id);
     if (!c || !c.models.some((m) => m.id === input.modelId)) throw new Error("连接或模型已移除");
-    return probeConnection(c, input.modelId);
+    return c.subscription ? probeSubscription(c, input.modelId) : probeConnection(c, input.modelId);
   }
   async save(input: SaveHarnessConnection): Promise<ModelSettingsView> {
     await withFileLock(this.file, async () => {
@@ -121,7 +139,14 @@ export class TwoCodeConnections {
         ...existing,
         ...input.connection,
         apiKey: input.apiKey || existing?.apiKey || "",
+        subscription: existing?.subscription,
       });
+      // 套餐授权只允许固定的官方端点；UI改名不能把令牌改成API密钥或转送第三方。
+      if (
+        c.subscription &&
+        (c.baseUrl !== existing!.baseUrl || c.api !== existing!.api || input.apiKey)
+      )
+        throw new Error("ChatGPT套餐连接不使用API密钥，地址与接口由Pi管理");
       c.models = c.models.map((m) => ({
         ...existing?.models.find((old) => old.id === m.id),
         ...m,
@@ -201,13 +226,14 @@ export class TwoCodeConnections {
         entry.harness === selection.harness && entry.provider === (selection.provider || ""),
     );
     if (!c) throw new Error("所选连接已移除，请在模型设置中重新选择");
-    if (!state.connections.some((saved) => saved.id === c.id)) return;
+    if (!c.subscription && !state.connections.some((saved) => saved.id === c.id)) return;
     if (
       selection.model &&
       !c.models.some((m) => m.id === selection.model || m.aliases?.includes(selection.model!))
     )
       throw new Error("所选模型已移除，请重新选择模型");
     return {
+      subscription: c.subscription,
       baseUrl: c.baseUrl,
       apiKey: c.apiKey,
       api: c.api,

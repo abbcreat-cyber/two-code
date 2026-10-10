@@ -9,6 +9,7 @@ export interface ConnectionModel {
   maxTokens?: number;
 }
 export interface HarnessConnection {
+  authentication?: "chatgpt";
   id: string;
   harness: "claude-code" | "pi";
   provider: string;
