@@ -1,4 +1,10 @@
 import type { ITwoCodeService } from "./contract.js";
+import { normalizeThinkingSelection } from "./contract.js";
+
+export const explicitAstraThinking = normalizeThinkingSelection({
+  harness: "pi",
+  model: "gpt-6-astra",
+});
 
 export async function createPair(service: ITwoCodeService, workspacePath: string) {
   return service.create({

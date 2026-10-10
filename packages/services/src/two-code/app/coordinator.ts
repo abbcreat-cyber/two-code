@@ -12,6 +12,7 @@ import type {
 import type { CoordinatorDependencies, EngineReport, HarnessAdapter } from "./ports.js";
 import { parsePreferences } from "../domain/snapshot.js";
 import { permissionDecision } from "./permission-policy.js";
+import { normalizeTaskThinking } from "../domain/thinking.js";
 import {
   appendEvent,
   leadInstruction,
@@ -117,9 +118,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     this.changes.fire(copy(task));
     return copy(task);
   }
-  async read(id: string) {
-    return copy(await this.task(id));
-  }
+  read = async (id: string) => copy(await this.task(id));
   async configure(input: {
     taskId: string;
     preferences: TwoCodePreferences;
@@ -193,6 +192,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     this.current(task, run);
     const previous = copy(task);
     run.connections = await this.deps.connections?.(task);
+    normalizeTaskThinking(task, await this.catalog());
     task.requestIds.push(run.requestId);
     task.error = undefined;
     task.status = "running";

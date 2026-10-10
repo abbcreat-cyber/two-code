@@ -1,5 +1,10 @@
 import type { Event } from "@zcode/rpc";
 import type { TwoCodeModelSettingsApi } from "./settings-contract.js";
+export {
+  modelThinkingProfiles,
+  selectionThinkingProfile,
+  normalizeThinkingSelection,
+} from "./domain/thinking.js";
 export type {
   ConnectionModel,
   HarnessConnection,

@@ -8,6 +8,8 @@ UI重开先读快照再消费单调序号变化。Host重启将未完成任务�
 
 技术端口和验收见specs/two-code/multi-harness.md。
 
+modelThinkingProfiles是官方档位的固定快照，selectionThinkingProfile与normalizeThinkingSelection供UI和运行准入共享。没有默认菜单项，已知模型归一为显式档位；未收录模型不猜选项。来源与更新日期见specs/two-code/official-thinking-levels.md。Pi模型能力与off/开启的协议映射只在适配层处理。
+
 ChatGPT套餐连接的公共authentication字段为chatgpt；凭据路径与令牌不出Host。EngineConnection.subscription携带冻结的专属agent目录、Node和代理，Pi原生OAuth共享文件锁负责刷新，角色session仍独立。固定官方端点不可经UI更改；测试连接也调用同一Pi原生授权链。
 
 testConnection校验已保存连接及revision，用一次有界模型请求检测当前认证和响应；仅返回ok/message，不返回服务端错误正文或凭据。名称核验与请求连通性独立，UI不把路由元数据当成连通证据。

@@ -15,6 +15,7 @@ import type { EngineConnection } from "../app/ports.js";
 import { nativeConnections, type PrivateConnection } from "./native-connections.js";
 import { nameForModel, readLocalModelRoutes } from "./model-names.js";
 import { probeConnection } from "./connection-probe.js";
+import { findModelThinkingProfile, piThinkingMetadata } from "../domain/thinking.js";
 import {
   readChatGPTConnection,
   probeSubscription,
@@ -226,7 +227,12 @@ export class TwoCodeConnections {
         entry.harness === selection.harness && entry.provider === (selection.provider || ""),
     );
     if (!c) throw new Error("所选连接已移除，请在模型设置中重新选择");
-    if (!c.subscription && !state.connections.some((saved) => saved.id === c.id)) return;
+    if (
+      !c.subscription &&
+      !state.connections.some((saved) => saved.id === c.id) &&
+      !(c.harness === "pi" && c.models.some((m) => findModelThinkingProfile(m.id, m.name)))
+    )
+      return;
     if (
       selection.model &&
       !c.models.some((m) => m.id === selection.model || m.aliases?.includes(selection.model!))
@@ -257,6 +263,11 @@ export class TwoCodeConnections {
           reasoning: m.reasoning ?? true,
           contextWindow: m.contextWindow ?? 128000,
           maxTokens: m.maxTokens ?? 8192,
+          ...piThinkingMetadata(m.id, m.name, c.api),
+          compat: {
+            ...(m as { compat?: Record<string, unknown> }).compat,
+            ...piThinkingMetadata(m.id, m.name, c.api).compat,
+          },
         })),
       },
     };

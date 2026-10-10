@@ -7,6 +7,7 @@ import { piEntry } from "./paths.js";
 import { ToolBridge, piToolExtension } from "./tool-bridge.js";
 import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { subscriptionEnvironment } from "./chatgpt-subscription.js";
+import { piThinkingLevel } from "../domain/thinking.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -58,7 +59,8 @@ export class PiAdapter implements HarnessAdapter {
     if (input.selection.provider)
       args.push("--provider", input.connection?.subscription ? "openai" : input.selection.provider);
     if (input.selection.model) args.push("--model", input.selection.model);
-    if (input.selection.thinking) args.push("--thinking", input.selection.thinking);
+    if (input.selection.thinking)
+      args.push("--thinking", piThinkingLevel(input.selection.thinking));
     let toolEnvironment = {};
     let connectionEnvironment = {};
     if (input.connection?.subscription) {

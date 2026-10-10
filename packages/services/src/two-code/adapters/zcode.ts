@@ -58,7 +58,12 @@ export class ZCodeAdapter implements HarnessAdapter {
             providerId: input.selection.provider,
             modelId: input.selection.model,
             ...(input.selection.thinking
-              ? { options: { reasoningLevel: input.selection.thinking } }
+              ? {
+                  options: {
+                    reasoningLevel:
+                      input.selection.thinking === "none" ? "disabled" : input.selection.thinking,
+                  },
+                }
               : {}),
           }
         : undefined;

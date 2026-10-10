@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Settings2, Search } from "lucide-react";
 import type { ActorRole, EngineSelection, HarnessInfo } from "@zcode/services";
+import { normalizeThinkingSelection } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.js";
 import {
@@ -40,6 +41,8 @@ export function RoleModelPopover({
     [saving, setSaving] = useState(false),
     [error, setError] = useState("");
   const label = role === "lead" ? "主手" : "副手";
+  const levels = thinkingOptions(selection, catalog);
+  const thinking = normalizeThinkingSelection(selection, catalog).thinking;
   const harness = catalog.find((h) => h.id === selection.harness);
   const candidates = modelChoices(catalog, selection).filter((m) =>
     `${m.name} ${m.selection.model} ${m.connection}`.toLowerCase().includes(query.toLowerCase()),
@@ -76,7 +79,7 @@ export function RoleModelPopover({
           data-testid={`two-code-${role}-model`}
           className="group/role-model min-w-0 gap-1 px-2 text-ui-base"
           data-composer-collapse-priority="3"
-          title={`${label} · ${harness?.name ?? selection.harness} · ${selection.provider || "本机连接"} · ${selection.model || "默认模型"} · 思考${thinkingLabels[selection.thinking ?? ""] ?? selection.thinking}`}
+          title={`${label} · ${harness?.name ?? selection.harness} · ${selection.provider || "本机连接"} · ${selection.model || "本机模型"} · 思考${thinkingLabels[thinking ?? ""] ?? "未收录"}`}
         >
           <span className="shrink-0 text-foreground-subtle">{label}</span>
           <span className="max-w-40 truncate group-data-[composer-compact=true]/role-model:max-w-24 group-data-[composer-model-icon=true]/toolbar:hidden">
@@ -124,7 +127,8 @@ export function RoleModelPopover({
               <SelectContent>
                 {catalog.map((h) => (
                   <SelectItem key={h.id} value={h.id} disabled={!h.available}>
-                    {h.name}{h.available ? "" : "（未安装）"}
+                    {h.name}
+                    {h.available ? "" : "（未安装）"}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -175,14 +179,12 @@ export function RoleModelPopover({
         <label className="flex shrink-0 items-center justify-between gap-3 border-t border-border p-3 text-ui-caption text-foreground-subtle">
           思考档位
           <Select
-            value={selection.thinking || "default"}
-            disabled={disabled || saving}
-            onValueChange={(level) =>
-              void save({ ...selection, thinking: level === "default" ? undefined : level }, false)
-            }
+            value={levels.length ? thinking : ""}
+            disabled={disabled || saving || !levels.length}
+            onValueChange={(level) => void save({ ...selection, thinking: level }, false)}
           >
             <SelectTrigger aria-label={`${label}思考档位`} className="min-w-32" size="lg">
-              <SelectValue />
+              <SelectValue placeholder="未收录" />
             </SelectTrigger>
             <SelectContent
               position="popper"
@@ -191,8 +193,8 @@ export function RoleModelPopover({
               sideOffset={6}
               className="min-w-36"
             >
-              {thinkingOptions(selection).map((level) => (
-                <SelectItem key={level} value={level || "default"}>
+              {levels.map((level) => (
+                <SelectItem key={level} value={level} title={level}>
                   {thinkingLabels[level]}
                 </SelectItem>
               ))}

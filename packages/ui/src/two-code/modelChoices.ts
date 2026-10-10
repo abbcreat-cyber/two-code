@@ -1,7 +1,8 @@
 import type { EngineSelection, HarnessInfo } from "@zcode/services";
+import { selectionThinkingProfile, normalizeThinkingSelection } from "@zcode/services";
 
 export const thinkingLabels: Record<string, string> = {
-  "": "默认",
+  none: "关闭",
   off: "关闭",
   disabled: "关闭",
   enabled: "开启",
@@ -12,12 +13,8 @@ export const thinkingLabels: Record<string, string> = {
   xhigh: "极高",
   max: "最高",
 };
-export function thinkingOptions(selection: EngineSelection) {
-  return selection.harness === "pi"
-    ? ["", "off", "minimal", "low", "medium", "high", "xhigh"]
-    : selection.harness === "zcode"
-      ? ["", "disabled", "enabled", "low", "medium", "high", "xhigh", "max"]
-      : ["", "low", "medium", "high", "xhigh", "max"];
+export function thinkingOptions(selection: EngineSelection, catalog: HarnessInfo[] = []) {
+  return selectionThinkingProfile(selection, catalog)?.levels ?? [];
 }
 export function sameModel(a: EngineSelection, b: EngineSelection) {
   return (
@@ -71,9 +68,8 @@ export function selectedModelName(catalog: HarnessInfo[], selection: EngineSelec
   return modelChoices(catalog, selection).find((m) => m.selected)!.name;
 }
 export function chooseModel(current: EngineSelection, next: EngineSelection): EngineSelection {
-  const levels = thinkingOptions(next);
-  return {
+  return normalizeThinkingSelection({
     ...next,
-    thinking: levels.includes(current.thinking ?? "") ? current.thinking : undefined,
-  };
+    thinking: current.thinking,
+  });
 }

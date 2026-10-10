@@ -95,6 +95,9 @@ export class ClaudeAdapter implements HarnessAdapter {
           ...(input.sessionId ? { resume: input.sessionId } : { sessionId }),
           ...(input.selection.model ? { model: input.selection.model } : {}),
           ...(effort ? { effort } : {}),
+          ...(["none", "disabled", "off"].includes(input.selection.thinking ?? "")
+            ? { thinking: { type: "disabled" as const } }
+            : {}),
           systemPrompt: { type: "preset", preset: "claude_code", append: input.systemPrompt },
           includePartialMessages: true,
           ...(connectionEnv ? { settings: { env: connectionEnv } } : {}),
