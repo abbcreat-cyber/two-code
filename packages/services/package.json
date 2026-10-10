@@ -17,6 +17,7 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.246",
     "@larksuiteoapi/node-sdk": "1.64.0",
     "@zcode/provider": "workspace:*",
     "@zcode/provider-node": "workspace:*",

@@ -259,6 +259,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenCommandCenter,
   onOpenAutomations,
   onOpenPluginStore,
+  onOpenTwoCode,
+  twoCodeActive = false,
   automationsActive = false,
   pluginStoreActive = false,
   onFileTreeOpenChange,
@@ -311,6 +313,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenCommandCenter: () => void;
   onOpenAutomations?: () => void;
   onOpenPluginStore?: () => void;
+  onOpenTwoCode?: () => void;
+  twoCodeActive?: boolean;
   automationsActive?: boolean;
   pluginStoreActive?: boolean;
   onFileTreeOpenChange?: (open: boolean) => void;
@@ -1348,6 +1352,22 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             </Button>
           </div>
 
+          {onOpenTwoCode && (
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={onOpenTwoCode}
+              aria-pressed={twoCodeActive}
+              data-testid="two-code-sidebar-open"
+              className={cn(
+                "mx-2 mb-2 justify-start gap-2 text-ui-base",
+                twoCodeActive && "bg-selected",
+              )}
+            >
+              <Blocks className="size-4" />
+              双角色
+            </Button>
+          )}
           <div className="relative flex min-h-0 flex-1 flex-col">
             <StickyGroupHeaderSlot header={groupedStickyHeader} />
             <div

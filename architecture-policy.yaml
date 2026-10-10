@@ -2,6 +2,18 @@ version: 1
 
 # 存量模块先标记为 legacy；新模块或完成迁移的模块设置 managed: true。
 modules:
+  - id: two-code
+    roots: [packages/services/src/two-code]
+    managed: true
+    requires: [rpc, shared, services]
+    publicEntrypoints:
+      [
+        packages/services/src/two-code/contract.ts,
+        packages/services/src/two-code/adapters/bootstrap.ts,
+      ]
+    layers: { domain: domain, app: app, adapters: adapters }
+    layerOrder: [domain, app, adapters]
+    owner: two-code-coordination
   - id: rpc
     roots: [packages/rpc/src]
     managed: false

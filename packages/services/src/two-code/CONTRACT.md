@@ -1,0 +1,9 @@
+# Two Code
+
+唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
+
+调用方经contract访问catalog/list/create/read/submit/cancel/respond及onDidChange。运行中不接受第二条普通输入；取消后显式续接保留角色会话。重复requestId不重复执行。副手能力只注入主手，不允许跨任务派工。读者不得把completed当作品质验收。
+
+UI重开先读快照再消费单调序号变化。Host重启将未完成任务标为可恢复错误，禁止自动重跑。权限等待随取消结束；晚到结果不得覆盖取消。持久化失败必须显式报错。
+
+技术端口和验收见specs/two-code/multi-harness.md。

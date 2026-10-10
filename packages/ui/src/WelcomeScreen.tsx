@@ -30,7 +30,7 @@ interface WelcomeScreenProps {
   onComplete: (reason: LoginCompleteReason) => void | Promise<void>;
 }
 
-export type LoginCompleteReason = "oauth" | "apiKey" | "skip";
+export type LoginCompleteReason = "oauth" | "apiKey" | "skip" | "localHarness";
 
 export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
   return (
@@ -313,6 +313,14 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
               </Alert>
             ) : null}
 
+            <Button
+              variant="default"
+              className="h-10 w-full text-ui-base"
+              data-testid="two-code-local-entry"
+              onClick={() => void onComplete("localHarness")}
+            >
+              使用本机脚手架
+            </Button>
             {!loadingProviders ? (
               <div className="space-y-2">
                 {visibleProviders.map((provider) => (

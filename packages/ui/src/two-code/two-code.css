@@ -1,0 +1,303 @@
+.two-code-workbench {
+  height: 100%;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+.two-code-workbench button:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.two-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.two-code-emblem {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: var(--color-brand);
+}
+.two-code-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.two-code-config {
+  width: 292px;
+  flex-shrink: 0;
+  overflow: auto;
+  padding: 20px 16px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-sidebar);
+}
+.two-code-mode {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: var(--color-background);
+}
+.two-code-mode button {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: var(--text-ui-caption);
+}
+.two-code-mode button[aria-pressed="true"] {
+  background: var(--color-selected);
+  font-weight: 600;
+}
+.two-code-mode button:disabled {
+  cursor: default;
+}
+.two-code-role {
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+}
+.two-code-role-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #7378ce;
+  background: #7378ce16;
+}
+.two-code-role-sidekick .two-code-role-mark {
+  color: #399d97;
+  background: #399d9716;
+}
+.two-code-role-fields {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+}
+.two-code-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.two-code-field > span {
+  font-size: var(--text-ui-xs);
+  color: var(--color-foreground-subtle);
+}
+.two-code-field input,
+.two-code-field select {
+  width: 100%;
+  height: 31px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 6px;
+  background: var(--color-input);
+  color: var(--color-foreground);
+  font-size: var(--text-ui-caption);
+}
+.two-code-field :is(input, select):focus-visible,
+.two-code-composer textarea:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.two-code-field :disabled {
+  opacity: 0.7;
+}
+.two-code-connector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 6px;
+  font-size: var(--text-ui-xs);
+  color: var(--color-foreground-subtlest);
+}
+.two-code-connector span {
+  height: 1px;
+  background: var(--color-border);
+  flex: 1;
+}
+.two-code-history {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+}
+.two-code-history button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 9px 8px;
+  border-radius: 6px;
+  font-size: var(--text-ui-caption);
+}
+.two-code-history button:hover {
+  background: var(--color-surface-hover);
+}
+.two-code-history button[aria-pressed="true"] {
+  background: var(--color-selected);
+}
+.two-code-dot {
+  height: 6px;
+  width: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-foreground-subtlest);
+}
+.two-code-dot.running {
+  background: var(--color-warning);
+}
+.two-code-dot.completed {
+  background: var(--color-success);
+}
+.two-code-dot.error {
+  background: var(--color-destructive);
+}
+.two-code-conversation {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.two-code-conversation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.two-code-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 24px;
+  scrollbar-gutter: stable;
+}
+.two-code-empty {
+  height: 100%;
+  min-height: 200px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
+  max-width: 500px;
+  margin: auto;
+}
+.two-code-empty-rails {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 22px;
+  color: var(--color-foreground-subtle);
+  font-size: var(--text-ui-caption);
+}
+.two-code-empty-rails span {
+  padding: 8px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.two-code-event {
+  margin: 14px auto;
+  max-width: 800px;
+}
+.two-code-event-label {
+  font-size: var(--text-ui-xs);
+  color: var(--color-foreground-subtle);
+  margin-bottom: 5px;
+}
+.two-code-event.user {
+  padding: 12px 14px;
+  background: var(--color-surface);
+  border-radius: 8px;
+}
+.two-code-event.sidekick {
+  padding-left: 12px;
+  border-left: 2px solid #399d9760;
+}
+.two-code-event.handoff {
+  padding: 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+}
+.two-code-event.tool,
+.two-code-event.status {
+  color: var(--color-foreground-subtle);
+}
+.two-code-event.tool > div:last-child,
+.two-code-event.status > div:last-child {
+  font-size: var(--text-ui-xs);
+}
+.two-code-event.error,
+.two-code-error {
+  color: var(--color-destructive);
+}
+.two-code-error {
+  padding: 10px 24px;
+  font-size: var(--text-ui-caption);
+  max-height: 100px;
+  overflow: auto;
+}
+.two-code-permissions {
+  padding: 12px 24px;
+  background: var(--color-interaction-confirmation-surface);
+}
+.two-code-composer {
+  margin: 12px 24px 20px;
+  padding: 12px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 12px;
+  background: var(--color-input);
+}
+.two-code-composer textarea {
+  width: 100%;
+  min-height: 74px;
+  max-height: 200px;
+  resize: vertical;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-ui-base);
+}
+@media (max-width: 900px) {
+  .two-code-config {
+    width: 245px;
+  }
+  .two-code-header {
+    padding: 14px 16px;
+  }
+  .two-code-transcript {
+    padding: 10px 16px;
+  }
+  .two-code-composer {
+    margin: 10px 16px 16px;
+  }
+}
+@media (max-width: 650px) {
+  .two-code-body {
+    overflow: auto;
+    flex-direction: column;
+  }
+  .two-code-config {
+    width: 100%;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .two-code-conversation {
+    min-height: 420px;
+  }
+  .two-code-history {
+    max-height: 120px;
+    overflow: auto;
+  }
+}

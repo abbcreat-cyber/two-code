@@ -1,6 +1,5 @@
 import { access, readFile, mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import type {
   AppSettings,
   ProviderFamilyDomain,
@@ -14,7 +13,12 @@ import {
 } from "@zcode/shared";
 import type { ISettingService } from "./setting.js";
 import { normalizeSettingsPatch } from "#src/setting/normalizeSettingsPatch.js";
-import { copyDataDirectory, getDataBaseDir, validateDataBaseDirTarget } from "../paths.js";
+import {
+  copyDataDirectory,
+  getDataBaseDir,
+  getBootstrapDataBaseDir,
+  validateDataBaseDirTarget,
+} from "../paths.js";
 import { isEffectiveDevelopmentNodeEnv } from "../runtime-tools/nodeEnv.js";
 import { maybeThrowInjectedFsFault } from "../fs/fsFaultInjection.js";
 import { atomicWriteText } from "../fs/atomicFileUtils.js";
@@ -42,18 +46,9 @@ const debugLog = (...args: unknown[]) => {
   console.debug(formatLogPrefix("settingService", process.pid), ...args);
 };
 
-function resolveUserHomeDir() {
-  // 独立桌面 Dev 实例已设置自己的 home，设置服务却仍写真实 HOME，
-  // 导致启动迁移和外观操作污染其他实例。与 Electron 的显式 home 覆盖保持一致。
-  const envHome =
-    process.env.ZCODE_DESKTOP_HOME_DIR?.trim() ||
-    process.env.HOME?.trim() ||
-    process.env.USERPROFILE?.trim();
-  return envHome && envHome.length > 0 ? envHome : homedir();
-}
-
 function getSettingsDir() {
-  return join(resolveUserHomeDir(), ".zcode", "v2");
+  // Two Code首次启动不能导入官方ZCode的项目列表或dataBaseDir设置。
+  return join(getBootstrapDataBaseDir(), ".zcode", "v2");
 }
 
 function getSettingsFile() {
@@ -338,7 +333,7 @@ export function createSettingServiceWithMigrations(): {
 
     async updateDataBaseDir(newDir: string | undefined): Promise<void> {
       const currentBaseDir = getDataBaseDir();
-      const targetBaseDir = newDir?.trim() || homedir();
+      const targetBaseDir = newDir?.trim() || getBootstrapDataBaseDir();
       const validation = validateDataBaseDirTarget(targetBaseDir);
       if (!validation.ok) {
         // Windows 安装目录由安装器/自动更新管理，把 .zcode/v2 放进去可能在升级时被覆盖。

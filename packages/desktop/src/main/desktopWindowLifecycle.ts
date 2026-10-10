@@ -128,7 +128,11 @@ export function createWindow(options: {
     const currentDomReadyGeneration = ++domReadyGeneration;
     options.logger.info(`[createWindow] dom-ready fired (${label})`);
 
-    if (process.platform === "win32" && !win.isDestroyed()) {
+    if (
+      process.platform === "win32" &&
+      !win.isDestroyed() &&
+      process.env.TWO_CODE_BACKGROUND !== "1"
+    ) {
       win.show();
       win.focus();
     }

@@ -10,6 +10,7 @@ import type { ICredentialService } from "./credential/credential.js";
 import type { IBroadcastService } from "./broadcast/broadcast.js";
 import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
 import type { IZCodeAgentService } from "./zcode-agent/zcodeAgent.js";
+import type { ITwoCodeService } from "./two-code/contract.js";
 import type { IZCodeSessionService } from "./zcode-session/zcodeSession.js";
 import type { ICuaPermissionService } from "./cua-permission-broker/cuaPermissionService.js";
 import type { IBotsService } from "./bots/bots.js";
@@ -42,6 +43,7 @@ import type { IConversationShareService } from "./conversation-share/conversatio
 
 /** UI 层消费的统一服务接口 */
 export interface IServiceAccessor {
+  readonly twoCodeService?: ITwoCodeService;
   readonly fileService: IFileService;
   readonly mediaPreviewService?: IMediaPreviewService;
   readonly gitService: IGitService;

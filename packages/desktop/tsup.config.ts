@@ -114,6 +114,7 @@ function createSharedDefines() {
 }
 
 const desktopNodeRuntimeExternals = [
+  "@anthropic-ai/claude-agent-sdk",
   "electron",
   "node-pty",
   "ssh2",

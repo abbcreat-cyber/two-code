@@ -579,6 +579,9 @@ export function createBrowserWindow(options: {
     // Linux frameless 后部分桌面环境仍可能显示 Electron 原生菜单栏，自动隐藏避免顶部出现两套菜单。
     autoHideMenuBar: isLinuxDesktopWindow(),
     ...buildDesktopWindowVisualOptions(),
+    ...(process.env.TWO_CODE_BACKGROUND === "1"
+      ? { show: false, focusable: false, x: -20000, y: -20000 }
+      : {}),
     webPreferences: {
       preload: options.preloadPath,
       contextIsolation: true,
@@ -588,6 +591,7 @@ export function createBrowserWindow(options: {
       // 永久 backgroundThrottling=false 会唤醒整窗 renderer、所有 webview guest
       // 和 GPU。窗口保持默认节流；截图期只临时唤醒 owner renderer 与当前目标 guest。
       zoomFactor: initialDesktopZoomFactor,
+      ...(process.env.TWO_CODE_BACKGROUND === "1" ? { backgroundThrottling: false } : {}),
       // 将 deviceMid 透传给 preload，供 renderer 在 React 渲染前同步读取
       additionalArguments: [`--device-id=${options.deviceMid ?? ""}`],
     },

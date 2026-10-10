@@ -1,0 +1,48 @@
+import { _electron as electron } from "playwright-core";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+const executablePath = "D:/Apps/TwoCode/releases/0.1.0/win-unpacked/Two Code.exe";
+const env = {
+  ...process.env,
+  TWO_CODE_BACKGROUND: "1",
+  ZCODE_DISABLE_FIXED_REMOTE_DEBUGGING_PORT: "1",
+};
+for (const key of [
+  "ELECTRON_RUN_AS_NODE",
+  "TWO_CODE_HOME",
+  "ZCODE_DATA_BASE_DIR",
+  "ZCODE_DESKTOP_APPLICATION_NAME",
+  "ZCODE_DESKTOP_USER_DATA_DIR",
+  "ZCODE_DESKTOP_SESSION_DATA_DIR",
+])
+  delete env[key];
+const app = await electron.launch({ executablePath, args: ["--disable-gpu"], env, timeout: 60000 });
+try {
+  const page = await app.firstWindow();
+  await page.getByTestId("two-code-workbench").waitFor({ state: "visible", timeout: 30000 });
+  const identity = await app.evaluate(({ app, BrowserWindow }) => ({
+    name: app.name,
+    userData: app.getPath("userData"),
+    executable: process.execPath,
+    windows: BrowserWindow.getAllWindows().map((w) => ({
+      title: w.getTitle(),
+      bounds: w.getBounds(),
+      focusable: w.isFocusable(),
+    })),
+  }));
+  assert.equal(identity.name, "Two Code");
+  assert.equal(identity.userData.replaceAll("\\", "/"), "D:/Apps/TwoCode/state/electron");
+  assert(identity.windows.every((w) => w.bounds.x < -1000 && !w.focusable));
+  assert.equal(
+    await page.getByLabel("主手模型", { exact: true }).inputValue(),
+    "claude-sonnet-4-8",
+  );
+  assert.equal(await page.getByLabel("副手提供方", { exact: true }).inputValue(), "ds-tencent");
+  await fs.writeFile(
+    "D:/Apps/TwoCode/qa/installed-identity.json",
+    JSON.stringify(identity, null, 2),
+  );
+  console.log(JSON.stringify({ installedIdentityPassed: true, ...identity }));
+} finally {
+  await app.close();
+}

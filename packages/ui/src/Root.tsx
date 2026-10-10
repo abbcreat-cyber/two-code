@@ -27,7 +27,6 @@ import { reportUiLaunchToInput } from "@/lib/uiPerfArmsTelemetry.js";
 import { countAllUnreadTasks } from "@/lib/unreadTaskCount.js";
 import {
   isProviderStartupSyncPending,
-  shouldEnableProviderAvailabilityLoginEntryGuard,
   shouldResolveProviderStartupState,
   shouldBlockRootRender,
   shouldShowRootStartupLoading,
@@ -428,8 +427,8 @@ function RootInner({
     modelSelectionViewHydrated:
       rootProviderAvailability.hydrated || rootModelSelectionRead.state.status === "error",
   });
-  const providerAvailabilityLoginEntryGuardEnabled =
-    shouldEnableProviderAvailabilityLoginEntryGuard();
+  // Two Code本机脚手架不依赖Z.ai账号，启动时不强制进入云账号入口。
+  const providerAvailabilityLoginEntryGuardEnabled = false;
   const { startupCheckCompleted: providerAvailabilityStartupCheckCompleted } =
     useProviderAvailabilityLoginEntryGuard({
       enabled: providerAvailabilityLoginEntryGuardEnabled,
@@ -872,6 +871,7 @@ function RootInner({
   };
   const handleWelcomeScreenComplete = useCallback(
     async (reason: LoginCompleteReason) => {
+      if (reason === "localHarness") localStorage.setItem("two-code:localMode", "1");
       await refreshAppSettings();
       if (
         welcomeScreenOpenReason !== "startup-provider-required" ||
@@ -1013,6 +1013,7 @@ function RootInner({
       {remoteConnectionDialog}
       {directoryBrowserDialog}
       <OccupationOnboarding
+        skipAutomatic
         showWindowControls={Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop))}
         showChildrenWhileLoading={!workspaceShellPath && isSettingsTabActive}
         isMacDesktop={isMacDesktop}

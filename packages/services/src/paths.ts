@@ -9,7 +9,15 @@ import { DATA_BASE_DIR_FORBIDDEN_WINDOWS_INSTALL_DIR_ERROR_CODE } from "@zcode/s
 let _dataBaseDir: string | null = null;
 export const ZCODE_WINDOWS_APP_INSTALL_DIR_ENV = "ZCODE_WINDOWS_APP_INSTALL_DIR";
 const envDataBaseDir = process.env.ZCODE_DATA_BASE_DIR?.trim() || null;
-const defaultDataBaseDir = process.env.HOME?.trim() || homedir();
+// Two Code的本地数据与官方ZCode、Step Code隔离，不能退回它们的默认HOME。
+const defaultDataBaseDir =
+  process.env.TWO_CODE_HOME?.trim() ||
+  (process.platform === "win32" ? "D:/Apps/TwoCode/data" : join(homedir(), ".two-code"));
+
+/** Bootstrap设置必须固定在自己的根目录，不能读取官方ZCode的HOME设置。 */
+export function getBootstrapDataBaseDir(): string {
+  return envDataBaseDir ?? defaultDataBaseDir;
+}
 
 interface DataBaseDirTargetValidationOptions {
   platform?: NodeJS.Platform | string;

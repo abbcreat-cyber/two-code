@@ -2,7 +2,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { runCommand, runCommandAndReadStdout } from "../../scripts/spawn-command.mjs";
 import { loadBuiltinProviderConfig } from "../../scripts/builtin-provider-config.mjs";
@@ -108,6 +108,16 @@ const asarCliPath = resolve(
   "asar.js",
 );
 const REQUIRED_ASAR_RUNTIME_MODULES = [
+  // hoisted收集器可能漏掉直接依赖；外置的生产依赖全部作为闭包根验证/补齐。
+  ...Object.keys(requireFromConfig("./package.json").dependencies).filter(
+    (name) =>
+      !name.startsWith("@zcode/") &&
+      !name.startsWith("@lydell/") &&
+      !["react", "react-dom"].includes(name),
+  ),
+  // pnpm collector在此fork的hoisted布局漏掉整个node-pty，必须纳入运行时闭包。
+  "node-pty",
+  "@anthropic-ai/claude-agent-sdk",
   "module-details-from-path",
   "@opentelemetry/api-logs",
   // Bugfix: telemetry 的 OTLP exporter 会在启动阶段加载 sdk-metrics。pnpm 开发态可从
@@ -313,6 +323,8 @@ function resolveMissingRuntimeModules(appAsarPath) {
     runtimeModuleLookupRoots,
   );
   const resolvableRuntimeModules = runtimeModules.filter((entry) => {
+    // 使用用户安装的Claude CLI；SDK各平台CLI可选二进制不进入Two Code安装包。
+    if (entry.moduleName.startsWith("@anthropic-ai/claude-agent-sdk-")) return false;
     if (!entry.sourceModulePath) {
       // 不同平台/安装布局下，部分运行时依赖可能被裁剪或未落到本次打包工作区。
       // 之前这里直接在 copy 阶段抛错会中断整个平台出包；改为记录告警并跳过该模块，
@@ -392,7 +404,21 @@ async function injectHoistedRuntimeModulesIntoAsar(context) {
         // 所以在 afterPack 阶段直接重写 app.asar，先把这些运行时包补进去，再交给后续签名和出包。
         mkdirSync(dirname(targetModulePath), { recursive: true });
         rmSync(targetModulePath, { force: true, recursive: true });
-        cpSync(sourceModulePath, targetModulePath, { recursive: true });
+        cpSync(sourceModulePath, targetModulePath, {
+          recursive: true,
+          filter: (source) => {
+            if (moduleName !== "node-pty") return true;
+            const local = relative(sourceModulePath, source).replaceAll("\\", "/");
+            // 闭包补包也遵循同一native资源边界，避免重新带入其他平台与调试二进制。
+            return (
+              !local.endsWith(".pdb") &&
+              !/^(?:build|bin)(?:\/|$)/.test(local) &&
+              (!local.startsWith("prebuilds/") ||
+                local === `prebuilds/${targetPlatform.key}` ||
+                local.startsWith(`prebuilds/${targetPlatform.key}/`))
+            );
+          },
+        });
       }
     });
 
@@ -457,6 +483,7 @@ export default {
   // Linux deb 打包（fpm）会校验 package metadata 中的 homepage、author.email、maintainer。
   // CI 环境下若这些字段缺失会在产物阶段直接失败。这里统一在构建配置补齐，避免依赖外部注入。
   extraMetadata: {
+    main: "resources/two-code-bootstrap.cjs",
     version: buildMetadata.appVersion,
     zcodeProductFlavor: desktopProductIdentity.flavor,
     homepage: "https://zcode.z.ai",
@@ -487,6 +514,7 @@ export default {
     buildResources: "build",
   },
   files: [
+    "resources/two-code-bootstrap.cjs",
     "out/**/*",
     "package.json",
     // app.asar 会把桌面端运行时 node_modules 一并打进去，依赖包自带的 .map / README
@@ -496,6 +524,7 @@ export default {
     "!node_modules/@zcode/**",
     "!node_modules/react/**",
     "!node_modules/react-dom/**",
+    "!node_modules/@anthropic-ai/claude-agent-sdk-*/**",
   ],
   asarUnpack: [
     // node-pty 的 target prebuild 还包含 spawn-helper / winpty-agent.exe 等辅助可执行文件，
@@ -652,9 +681,9 @@ export default {
   protocols: [
     {
       // 协议处理器的展示名之前使用小写 scheme，打包产物里的协议描述无法体现产品名。
-      // 展示名跟随安装包身份；scheme 仍保持 zcode，因此两个应用中最后注册者会成为默认 handler。
+      // Two Code独立协议，不覆盖官方ZCode的handler。
       name: desktopProductIdentity.productName,
-      schemes: ["zcode"],
+      schemes: ["two-code"],
     },
   ],
   mac: {

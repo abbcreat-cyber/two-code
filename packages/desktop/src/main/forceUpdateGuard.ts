@@ -34,6 +34,7 @@ interface ForceUpdateGuardResult {
 }
 
 interface ForceUpdateGuardOptions {
+  enabled?: boolean;
   locale: Locale;
   logger: ForceUpdateGuardLogger;
   endpointOrigin?: string;
@@ -217,6 +218,7 @@ function formatForceUpdateDialogText(
 export async function maybeBlockStartupForForceUpdate(
   options: ForceUpdateGuardOptions,
 ): Promise<ForceUpdateGuardResult> {
+  if (options.enabled === false) return { blocked: false };
   const requirement = await resolveDesktopForceUpdateRequirement({
     ...options,
     endpointOrigin: options.endpointOrigin,

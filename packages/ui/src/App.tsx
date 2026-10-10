@@ -47,7 +47,7 @@ import {
 } from "@/lib/settingsNavigation.js";
 import { runWorkspaceVisibleCommand } from "@/lib/workspaceVisibleCommand.js";
 import { ZCODE_PRODUCT_DOCS_URL } from "@/lib/productDocs.js";
-import appLogoUrl from "@/assets/provider-icons/logo-zai.svg";
+import appLogoUrl from "@/assets/two-code-mark.svg";
 import { resolveTheme } from "@/useTheme.js";
 import { WorkspaceShellLayout } from "@/app-shell/WorkspaceShellLayout.js";
 import { useAppChromeState } from "@/app-shell/useAppChromeState.js";
@@ -823,7 +823,7 @@ export function App({
     [locale, services.zcodeAgentService, setLocale, theme, setTheme, testMessages],
   );
   useTestActions(testActions);
-  const [workspaceMainView, setWorkspaceMainView] = useState<WorkspaceMainView>("chat");
+  const [workspaceMainView, setWorkspaceMainView] = useState<WorkspaceMainView>("two-code");
   const [openAutomationId, setOpenAutomationId] = useState<string | null>(null);
   const [openAutomationTab, setOpenAutomationTab] = useState<NonNullable<
     AutomationsNavigationTarget["automationTab"]

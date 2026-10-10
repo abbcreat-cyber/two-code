@@ -1,6 +1,15 @@
 // Descriptors & collection (browser-safe)
 export { type ServiceDescriptor, createServiceDescriptor } from "./descriptors.js";
 export { ServiceCollection } from "./collection.js";
+export { ITwoCodeService } from "./two-code/contract.js";
+export type {
+  ActorRole,
+  EngineSelection,
+  HarnessId,
+  HarnessInfo,
+  TwoCodeTask,
+  TwoCodePreferences,
+} from "./two-code/contract.js";
 export {
   IModelSelectionService,
   IProviderSettingsService,

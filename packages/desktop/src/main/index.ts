@@ -2013,7 +2013,8 @@ app.whenReady().then(async () => {
   // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
   // 不向 Preview 渠道提供更新。
   void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production",
+    // Two Code有独立发行身份，不接受上游ZCode安装包覆盖。
+    enabled: false,
     onBeforeQuitAndInstall: async () => {
       notifyStabilityLifecycle("update_install");
       await prepareAppQuit("auto-update quitAndInstall", "update-install");
@@ -2258,6 +2259,7 @@ app.whenReady().then(async () => {
   const forceUpdateGuardResult =
     ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
       ? await maybeBlockStartupForForceUpdate({
+          enabled: false,
           locale: currentApplicationLocale,
           logger,
           endpointOrigin: await resolveCurrentZCodeEndpointOrigin(),

@@ -861,8 +861,8 @@ const enUS: Record<string, string> = {
   "welcome.login": "Login",
   "welcome.loggingIn": "Logging in...",
   "welcome.loginFailed": "Login failed",
-  "login.title": "Welcome to ZCode",
-  "login.description": "Connect your account to start using ZCode",
+  "login.title": "Welcome to Two Code",
+  "login.description": "Use a local harness, or configure native ZCode models",
   "login.oauth.activeProviderHint":
     "Current active provider: {provider}. Signing in again replaces the current identity.",
   "login.oauth.loadingProviders": "Loading account providers...",
