@@ -14,6 +14,7 @@ import type { ActiveRun } from "./active-run.js";
 import { parsePreferences } from "../domain/snapshot.js";
 import { permissionDecision } from "./permission-policy.js";
 import { admitTask } from "./admission.js";
+import { recoverTask } from "./recovery.js";
 import {
   appendEvent,
   leadInstruction,
@@ -38,25 +39,24 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     this.ready = this.restore();
   }
   private async restore(): Promise<void> {
-    for (const task of await this.deps.store.load()) {
-      if (task.status === "running" && !(await this.deps.lease?.isActive(task.id))) {
-        task.status = "error";
-        task.error = "上次运行未正常结束。原生上下文保留，请核对已有产物后明确继续。";
-        for (const role of ["lead", "sidekick"] as const) {
-          if (task[role].status === "running") task[role].status = "cancelled";
-        }
-        task.permissions = [];
-        await this.deps.store.save(task);
-      }
+    for (const saved of await this.deps.store.load()) {
+      const task = await recoverTask(this.deps, saved);
       this.tasks.set(task.id, task);
       this.changes.fire(copy(task));
     }
   }
-  private async task(id: string): Promise<TwoCodeTask> {
+  private async task(id: string, leaseHeld = false): Promise<TwoCodeTask> {
     await this.ready;
-    if (!this.active.has(id) && this.deps.store.read) {
+    const canRefresh = () => !this.active.has(id) && (!this.configuring.has(id) || leaseHeld);
+    if (canRefresh() && this.deps.store.read) {
       const latest = await this.deps.store.read(id);
-      if (latest) this.tasks.set(id, latest);
+      if (latest && canRefresh()) {
+        const recovered = await recoverTask(this.deps, latest, leaseHeld);
+        if (canRefresh()) {
+          this.tasks.set(id, recovered);
+          if (recovered !== latest) this.changes.fire(copy(recovered));
+        }
+      }
     }
     const task = this.tasks.get(id);
     if (!task) throw new Error("任务不存在");
@@ -83,8 +83,13 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   }
   async list(workspacePath: string): Promise<TwoCodeTask[]> {
     await this.ready;
-    for (const latest of await this.deps.store.load())
-      if (!this.active.has(latest.id)) this.tasks.set(latest.id, latest);
+    for (const latest of await this.deps.store.load()) {
+      if (this.active.has(latest.id) || this.configuring.has(latest.id)) continue;
+      const recovered = await recoverTask(this.deps, latest);
+      if (this.active.has(latest.id) || this.configuring.has(latest.id)) continue;
+      this.tasks.set(latest.id, recovered);
+      if (recovered !== latest) this.changes.fire(copy(recovered));
+    }
     const canonical = await this.deps.validateWorkspace(workspacePath);
     return [...this.tasks.values()]
       .filter((task) => task.workspacePath === canonical)
@@ -118,7 +123,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     let release: (() => Promise<void>) | undefined;
     try {
       release = await this.deps.lease?.acquire(id);
-      const task = await this.task(id);
+      const task = await this.task(id, true);
       const next = reconfigureTask(task, preferences);
       await this.deps.store.save(next);
       this.tasks.set(id, next);

@@ -3,6 +3,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { runContextCases } from "./two-code-context-cases.mjs";
 import { runLatencyCases } from "./two-code-latency-cases.mjs";
+import { runRecoveryCases } from "./two-code-recovery-cases.mjs";
 
 export async function runEdgeCases({
   page,
@@ -18,6 +19,7 @@ export async function runEdgeCases({
 }) {
   await runContextCases({ page, root, tasks, fresh, send, completed, checkCase });
   await runLatencyCases({ page, fresh, send, completed, checkCase, tasks, until });
+  await runRecoveryCases({ page, root, fresh, send, completed, checkCase, read });
   const mode = async (name) => {
     await page.getByTestId("chat-mode-select-trigger").click();
     await page.getByRole("option", { name: new RegExp(name) }).click();

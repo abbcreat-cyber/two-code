@@ -3,15 +3,10 @@ import type { SessionUsageState } from "@zcode/shared/zcode-protocol-v4";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.js";
 import { ChatContextUsage } from "@/chat-input-toolbar/display.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { formatSessionDuration as duration } from "./formatSessionDuration.js";
 
 const tokens = (n: number) =>
   new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
-function duration(ms: number | null, zh: boolean) {
-  if (ms === null) return "—";
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}${zh ? "秒" : "s"}`;
-  return `${Math.floor(seconds / 60)}${zh ? "分" : "m "}${Math.round(seconds % 60)}${zh ? "秒" : "s"}`;
-}
 
 const triggerClass =
   "inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-2 py-1 text-ui-base text-foreground-subtle transition-colors hover:bg-surface-hover hover:text-foreground data-[state=open]:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring tabular-nums";
@@ -55,6 +50,7 @@ export function SessionStatisticsBar({ usage }: { usage: SessionUsageState | nul
     [zh ? "缓存命中" : "Cache hit", hitText],
     [zh ? "未缓存输入" : "Uncached input", fullTokens(u.inputTokens)],
     [zh ? "缓存读取" : "Cache read", fullTokens(u.cacheReadTokens)],
+    [zh ? "缓存写入" : "Cache write", fullTokens(u.cacheWriteTokens)],
     [zh ? "输出" : "Output", fullTokens(u.outputTokens)],
   ];
   const context = usage.contextWindow;
