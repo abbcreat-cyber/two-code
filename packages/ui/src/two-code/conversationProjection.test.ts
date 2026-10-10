@@ -57,3 +57,52 @@ test("cancelled handoff never appears as success in native timeline", () => {
   assert.equal(rows.find((r) => r.kind === "turnHeader")?.state, "completedInterrupted");
   assert.equal(rows.find((r) => r.kind === "toolCall")?.status, "cancelled");
 });
+
+test("saving model preferences cannot extend a completed turn duration", () => {
+  const task = structuredClone(base);
+  task.status = "completed";
+  task.events = [
+    { seq: 1, at: "2026-10-10T10:00:00Z", role: "user", kind: "message", text: "hi" },
+    { seq: 2, at: "2026-10-10T10:00:03Z", role: "lead", kind: "message", text: "hello" },
+  ];
+  task.updatedAt = "2026-10-10T11:00:00Z";
+  const header = projectTwoCodeRows(task).find((r) => r.kind === "turnHeader")!;
+  assert.equal(header.endedAt! - header.startedAt, 3000);
+});
+
+test("reasoning uses native rows, survives snapshot replay and stays out of answer text", () => {
+  const task = structuredClone(base);
+  const add = (
+    role: TwoCodeTask["events"][number]["role"],
+    kind: TwoCodeTask["events"][number]["kind"],
+    text: string,
+  ) => task.events.push({ seq: task.events.length + 1, at: task.updatedAt, role, kind, text });
+  add("user", "message", "检查");
+  add("lead", "reasoning", "主手片段一");
+  add("lead", "reasoning", "片段二");
+  const streaming = projectTwoCodeRows(task).find((r) => r.kind === "reasoning")!;
+  assert.equal(streaming.state, "streaming");
+  add("lead", "reasoning", "");
+  add("lead", "handoff", "核对");
+  add("sidekick", "reasoning", "副手真实片段");
+  add("sidekick", "message", "核对完成");
+  add("lead", "message", "最后答案");
+  task.status = "completed";
+  const rows = projectTwoCodeRows(JSON.parse(JSON.stringify(task)));
+  rows.forEach((r) => conversationRowSchema.parse(r));
+  const thoughts = rows.filter((r) => r.kind === "reasoning");
+  assert.equal(thoughts.length, 2);
+  assert.equal(thoughts[0]!.rowId, streaming.rowId);
+  assert.match(thoughts[0]!.text, /主手片段一片段二/);
+  assert.match(thoughts[1]!.text, /副手真实片段/);
+  assert.equal(
+    rows
+      .filter((r) => r.kind === "assistantText")
+      .map((r) => r.text)
+      .join(""),
+    "最后答案",
+  );
+  task.events = task.events.slice(0, 3);
+  task.status = "cancelled";
+  assert.equal(projectTwoCodeRows(task).find((r) => r.kind === "reasoning")?.state, "interrupted");
+});

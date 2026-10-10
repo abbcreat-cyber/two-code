@@ -9,7 +9,7 @@ import { JsonTaskStore } from "./json-store.js";
 import { ClaudeAdapter } from "./claude.js";
 import { PiAdapter } from "./pi.js";
 import { ZCodeAdapter } from "./zcode.js";
-import { claudeExecutable, piConfiguredModels, piEntry } from "./paths.js";
+import { claudeExecutable, claudeConfiguredModels, piConfiguredModels, piEntry } from "./paths.js";
 import { TaskLease } from "./task-lease.js";
 import { JsonPreferences } from "./preferences.js";
 
@@ -33,10 +33,11 @@ export function createTwoCodeService(
       return resolved;
     },
     catalog: async (): Promise<HarnessInfo[]> => {
-      const [claude, pi, models] = await Promise.all([
+      const [claude, pi, models, claudeModels] = await Promise.all([
         claudeExecutable(),
         piEntry(),
         piConfiguredModels(),
+        claudeConfiguredModels(),
       ]);
       return [
         {
@@ -51,7 +52,7 @@ export function createTwoCodeService(
           name: "Claude Code",
           available: !!claude,
           detail: claude ? "已检测到本机 CLI，沿用其认证配置" : "未找到 Claude Code CLI",
-          models: [],
+          models: claudeModels,
         },
         {
           id: "pi",

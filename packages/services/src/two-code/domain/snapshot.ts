@@ -54,7 +54,7 @@ const schema = z.object({
       seq: z.number().int().positive(),
       at: z.string(),
       role: z.enum(["lead", "sidekick", "user", "system"]),
-      kind: z.enum(["message", "tool", "status", "error", "handoff"]),
+      kind: z.enum(["message", "reasoning", "tool", "status", "error", "handoff"]),
       text: z.string(),
     }),
   ),

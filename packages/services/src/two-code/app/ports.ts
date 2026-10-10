@@ -8,7 +8,7 @@ import type {
   RunUsage,
 } from "../contract.js";
 export interface EngineEvent {
-  kind: "message" | "tool" | "session" | "model";
+  kind: "message" | "reasoning" | "tool" | "session" | "model";
   text: string;
 }
 export interface EngineRun {

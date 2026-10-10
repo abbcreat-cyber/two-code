@@ -91,6 +91,7 @@ export class ZCodeAdapter implements HarnessAdapter {
     await input.emit({ kind: "session", text: sessionId });
     let inputId: string | undefined;
     const buffered: ZCodeAgentServiceEvent[] = [];
+    const reasoningParts = new Set<string>();
     let resolveRun!: (text: string) => void, rejectRun!: (error: Error) => void;
     const done = new Promise<string>((resolve, reject) => {
       resolveRun = resolve;
@@ -120,8 +121,30 @@ export class ZCodeAdapter implements HarnessAdapter {
         event.payload && typeof event.payload === "object"
           ? (event.payload as Record<string, unknown>)
           : undefined;
-      if (event.type === "part.delta" && payload?.field === "text")
-        void input.emit({ kind: "message", text: String(payload.delta ?? "") }).catch(rejectRun);
+      // 原生桌面链路使用model.streaming；part.delta只属于另一种消息投影。
+      if (event.type === "model.streaming" && payload) {
+        if (payload.kind === "reasoning_delta" || payload.kind === "reasoning_end")
+          void input
+            .emit({
+              kind: "reasoning",
+              text: payload.kind === "reasoning_end" ? "" : String(payload.delta ?? ""),
+            })
+            .catch(rejectRun);
+        else if (payload.kind === "text_delta" || payload.kind === "text")
+          void input.emit({ kind: "message", text: String(payload.delta ?? "") }).catch(rejectRun);
+      }
+      if (event.type === "part.started" || event.type === "part.upserted") {
+        const part = payload?.part as { id?: string; type?: string } | undefined;
+        if (part?.type === "reasoning" && part.id) reasoningParts.add(part.id);
+      }
+      if (event.type === "part.delta" && payload) {
+        const reasoning =
+          payload.field === "reasoning" || reasoningParts.has(String(payload.partId));
+        if (reasoning || payload.field === "text")
+          void input
+            .emit({ kind: reasoning ? "reasoning" : "message", text: String(payload.delta ?? "") })
+            .catch(rejectRun);
+      }
       if (event.type === "tool.updated" && payload?.kind === "scheduled")
         void input
           .emit({ kind: "tool", text: String(payload.toolName ?? "工具") })

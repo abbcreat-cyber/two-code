@@ -128,6 +128,10 @@ export function useTwoCode(
     submit,
     cancel,
     respond,
+    saveDefaults: async (value: TwoCodePreferences) => {
+      if (!service) throw new Error("当前宿主未启用 Two Code 服务");
+      setPreferences(await service.configurePreferences(value));
+    },
     savePreferences: async (value: TwoCodePreferences) => {
       if (!service) return;
       setConfiguring(true);

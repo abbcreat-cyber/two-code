@@ -6,12 +6,14 @@ export function RoleCard({
   selection,
   catalog,
   disabled,
+  harnessLocked,
   onChange,
 }: {
   role: ActorRole;
   selection: EngineSelection;
   catalog: HarnessInfo[];
   disabled: boolean;
+  harnessLocked?: boolean;
   onChange(value: EngineSelection): void;
 }) {
   const label = role === "lead" ? "主手" : "副手";
@@ -24,10 +26,13 @@ export function RoleCard({
           className={fieldClass}
           aria-label={`${label}脚手架`}
           value={selection.harness}
+          disabled={harnessLocked}
           onChange={(e) =>
             onChange({
               ...selection,
               harness: e.target.value as HarnessId,
+              model: undefined,
+              modelLabel: undefined,
               provider: undefined,
               thinking: undefined,
             })

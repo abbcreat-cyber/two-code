@@ -184,6 +184,13 @@ export class PiAdapter implements HarnessAdapter {
           firstToken = performance.now();
         if (delta.type === "text_delta")
           void input.emit({ kind: "message", text: String(delta.delta ?? "") }).catch(rejectRun);
+        if (delta.type === "thinking_delta" || delta.type === "thinking_end")
+          void input
+            .emit({
+              kind: "reasoning",
+              text: delta.type === "thinking_end" ? "" : String(delta.delta ?? ""),
+            })
+            .catch(rejectRun);
       } else if (record.type === "message_end") {
         const message = object(record.message);
         if (message.role === "assistant") {

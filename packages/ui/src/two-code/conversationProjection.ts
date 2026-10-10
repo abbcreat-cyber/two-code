@@ -9,10 +9,38 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
     header: TurnHeaderRow | undefined,
     handoff: ToolCallRow | undefined;
   let message: Extract<ConversationRow, { kind: "assistantText" }> | undefined;
+  let thought: Extract<ConversationRow, { kind: "reasoning" }> | undefined;
+  let thoughtRole: string | undefined;
   for (const event of task.events) {
     const at = Date.parse(event.at),
       rowId = event.seq * 10;
     const base = () => ({ rowId, turnId, createdAt: at, createdAtSeq: event.seq });
+    if (thought && (event.kind !== "reasoning" || event.role !== thoughtRole || !event.text)) {
+      thought.state =
+        (event.kind === "error" || event.kind === "status") &&
+        (task.status === "cancelled" || task.status === "error")
+          ? "interrupted"
+          : "complete";
+      thought.durationMs = Math.max(0, at - thought.createdAt);
+      thought = undefined;
+    }
+    // 直接投影原生reasoning行，让原有“已工作”和思考显示设置拥有折叠交互。
+    if (event.kind === "reasoning") {
+      if (!event.text) continue;
+      message = undefined;
+      if (thought) thought.text += event.text;
+      else {
+        thoughtRole = event.role;
+        thought = {
+          ...base(),
+          kind: "reasoning",
+          state: "streaming",
+          text: `${event.role === "sidekick" ? "**副手**" : "**主手**"}\n\n${event.text}`,
+        };
+        rows.push(thought);
+      }
+      continue;
+    }
     if (event.role === "user" && event.kind === "message") {
       if (header?.state === "running") {
         header.state = "completedSuccess";
@@ -89,10 +117,15 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
           : task.status === "cancelled"
             ? "completedInterrupted"
             : "completedSuccess";
-    if (task.status !== "running") header.endedAt = Date.parse(task.updatedAt);
+    // 配置保存也会更新updatedAt；已工作时长取最后执行事件，不能随切模型增长。
+    if (task.status !== "running")
+      header.endedAt = Date.parse(task.events.at(-1)?.at ?? task.updatedAt);
   }
   if (message && task.status === "running" && task.lead.status === "running")
     message.state = "streaming";
+  if (thought && task.status !== "running")
+    thought.state =
+      task.status === "cancelled" || task.status === "error" ? "interrupted" : "complete";
   if (handoff?.status === "running" && task.status !== "running")
     handoff.status = task.sidekick.status === "completed" ? "success" : "cancelled";
   return rows;

@@ -16,6 +16,7 @@ import { projectTwoCodeRows } from "./conversationProjection.js";
 import { TwoCodeModelControls } from "./TwoCodeModelControls.js";
 import { SessionStatisticsBar } from "@/v4/composer/SessionStatisticsBar.js";
 import { projectTwoCodeUsage } from "./usageProjection.js";
+import { useSettings } from "@/hooks/useSettingService.js";
 
 export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => void }) {
   const id = twoCodeTaskId(props.sessionId);
@@ -46,6 +47,8 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     DEFAULT_CODE_PREVIEW_SETTINGS,
   );
   const rows = useMemo(() => projectTwoCodeRows(task), [task]);
+  const { settings } = useSettings();
+  const showReasoning = settings?.messageStreamShowReasoning ?? true;
   const context = useMemo(
     () => ({
       workspacePath: props.workspacePath,
@@ -53,6 +56,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
       theme,
       codePreviewSettings,
       sessionId: props.sessionId,
+      messageStreamShowReasoning: showReasoning,
       onOpenFileLink: props.onOpenFileLink,
       onOpenBrowserUrl: props.onOpenBrowserUrl,
       onOpenCodeViewer: props.onOpenCodeViewer,
@@ -68,6 +72,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
       theme,
       codePreviewSettings,
       task?.permissions.length,
+      showReasoning,
     ],
   );
   const send = (value: string) => {
@@ -164,6 +169,8 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
               catalog={state.catalog}
               locked={busy || sending || state.loading || state.configuring || !!props.readOnly}
               onChange={state.savePreferences}
+              onSaveDefaults={state.saveDefaults}
+              hasSessions={{ lead: !!task?.lead.sessionId, sidekick: !!task?.sidekick.sessionId }}
               onNative={id ? undefined : props.onNative}
             />
           }

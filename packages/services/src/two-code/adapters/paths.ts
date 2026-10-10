@@ -58,3 +58,25 @@ export async function piConfiguredModels() {
     return [];
   }
 }
+
+export async function claudeConfiguredModels() {
+  try {
+    const config = JSON.parse(await readFile(join(homedir(), ".claude", "settings.json"), "utf8"));
+    const models = new Map<string, { id: string; name: string }>();
+    for (const alias of ["sonnet", "opus", "haiku"]) {
+      const id = config.env?.[`ANTHROPIC_DEFAULT_${alias.toUpperCase()}_MODEL`];
+      if (typeof id === "string" && id) {
+        models.set(id, { id, name: id });
+        models.set(alias, {
+          id: alias,
+          name: `${alias[0]!.toUpperCase()}${alias.slice(1)} · 本机映射`,
+        });
+      }
+    }
+    if (typeof config.model === "string")
+      models.set(config.model, { id: config.model, name: config.model });
+    return [...models.values()];
+  } catch {
+    return [];
+  }
+}

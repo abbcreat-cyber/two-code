@@ -137,6 +137,10 @@ export class ClaudeAdapter implements HarnessAdapter {
           const event = message.event;
           if (event.type === "content_block_delta" && event.delta.type === "text_delta")
             await input.emit({ kind: "message", text: event.delta.text });
+          if (event.type === "content_block_delta" && event.delta.type === "thinking_delta")
+            await input.emit({ kind: "reasoning", text: event.delta.thinking });
+          if (event.type === "content_block_stop")
+            await input.emit({ kind: "reasoning", text: "" });
         } else if (message.type === "assistant") {
           const u = message.message.usage;
           if (u) {

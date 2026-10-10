@@ -289,6 +289,7 @@ export class TwoCodeCoordinator implements ITwoCodeService {
           if (event.kind === "session") {
             actor.sessionId = event.text;
             await this.deps.store.save(task);
+            this.changes.fire(copy(task));
           } else if (event.kind === "model") actor.actualModel = event.text;
           else this.emit(task, role, event.kind, event.text);
         },

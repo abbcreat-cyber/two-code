@@ -2,7 +2,7 @@ import { _electron as electron } from "playwright-core";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 const executablePath =
-  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.3.0-final/win-unpacked/Two Code.exe";
+  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.4.0-final/win-unpacked/Two Code.exe";
 const env = {
   ...process.env,
   TWO_CODE_BACKGROUND: "1",

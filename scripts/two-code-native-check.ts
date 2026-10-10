@@ -86,6 +86,10 @@ try {
       await fs.writeFile(path.join(root, "result.json"), JSON.stringify(state, null, 2));
       assert.equal(state.status, "completed", state.error);
       assert.match(state.lead.lastReport ?? "", /原生通路42/);
+      assert(
+        state.events.some((e) => e.kind === "reasoning" && e.text.length > 0),
+        "ZCode reasoning events missing",
+      );
       console.log(JSON.stringify({ nativePassed: true, root, session: state.lead.sessionId }));
       break;
     }

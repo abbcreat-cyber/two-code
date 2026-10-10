@@ -9,6 +9,7 @@ const workspace = path.join(root, "data/.zcode/workspace/default");
 await fs.mkdir(workspace, { recursive: true });
 await fs.mkdir(path.join(root, "data/tasks"), { recursive: true });
 const preferences = JSON.parse(await fs.readFile("D:/Apps/TwoCode/data/preferences.json", "utf8"));
+preferences.mode = "build";
 await fs.writeFile(path.join(root, "data/preferences.json"), JSON.stringify(preferences));
 const legacyId = randomUUID(),
   at = new Date().toISOString();
@@ -52,6 +53,12 @@ const app = await electron.launch({
 const errors = [];
 try {
   const page = await app.firstWindow();
+  const openPair = async () => {
+    await page.getByTestId("two-code-mode").click();
+    await page.getByRole("button", { name: "组合设置", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "组合设置" });
+    for (const summary of await dialog.locator("summary").all()) await summary.click();
+  };
   page.on("pageerror", (e) => errors.push(e.message));
   await page.getByTestId("two-code-native-session").waitFor({ state: "visible", timeout: 30000 });
   await page.getByTestId("two-code-lead-model").waitFor({ state: "visible", timeout: 30000 });
@@ -83,12 +90,11 @@ try {
     await page.getByRole("option", { name: new RegExp(label) }).waitFor();
   await page.screenshot({ animations: "disabled", path: path.join(root, "mode-menu.png") });
   await page.getByRole("option", { name: /自动编辑/ }).click();
-  await page.getByTestId("two-code-lead-model").click();
-  await page.getByRole("menuitem", { name: "管理模型", exact: true }).click();
+  await openPair();
   await page.getByLabel("主手模型", { exact: true }).fill("sonnet");
   await page.getByLabel("副手思考", { exact: true }).selectOption("medium");
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await page.getByRole("dialog", { name: "模型与脚手架" }).waitFor({ state: "hidden" });
+  await page.getByRole("dialog", { name: "组合设置" }).waitFor({ state: "hidden" });
   const configuredLegacy = JSON.parse(
     await fs.readFile(path.join(root, `data/tasks/${legacyId}.json`), "utf8"),
   );
@@ -123,10 +129,36 @@ try {
       .first()
       .click();
     await page.getByTestId("two-code-lead-model").click();
-    await page.getByRole("menuitem", { name: "管理模型", exact: true }).click();
-    await page.getByRole("dialog", { name: "模型与脚手架" }).waitFor();
+    const leadPanel = page.getByTestId("two-code-lead-panel");
+    await leadPanel.waitFor();
+    assert.equal(await leadPanel.getByLabel("主手脚手架").inputValue(), "claude-code");
+    await leadPanel.getByLabel("主手搜索模型").fill("sonnet");
+    assert((await leadPanel.getByRole("option").count()) > 0);
+    await page.screenshot({ animations: "disabled", path: path.join(root, "lead-panel.png") });
+    await leadPanel.getByRole("button", { name: "管理模型与连接…" }).click();
+    const roleDialog = page.getByRole("dialog", { name: "主手 · 模型与连接" });
+    await roleDialog.waitFor();
+    assert.equal(await roleDialog.getByLabel("副手模型", { exact: true }).count(), 0);
+    await roleDialog.getByRole("button", { name: "取消", exact: true }).click();
+    await page.getByTestId("two-code-sidekick-model").click();
+    const childPanel = page.getByTestId("two-code-sidekick-panel");
+    await childPanel.getByRole("button", { name: "中", exact: true }).click();
+    await page.waitForTimeout(200);
+    const childBounds = await childPanel.boundingBox();
+    assert(
+      childBounds.y >= 0 &&
+        childBounds.y + childBounds.height <= (await page.evaluate(() => innerHeight)),
+      "role panel clipped by viewport",
+    );
+    await page.screenshot({ animations: "disabled", path: path.join(root, "sidekick-panel.png") });
+    await page.keyboard.press("Escape");
+    await openPair();
     assert.equal(await page.getByLabel("主手脚手架", { exact: true }).inputValue(), "claude-code");
     await page.getByRole("button", { name: "保存", exact: true }).click();
+    await page.getByTestId("two-code-mode").click();
+    await page.getByRole("button", { name: "设为新任务默认组合", exact: true }).click();
+    await page.getByText("已设为新任务默认组合", { exact: true }).waitFor();
+    await page.keyboard.press("Escape");
     const prompt =
       "原生界面实测。主手先用Write工具在当前目录创建integration-proof.txt，内容恰为INTEGRATED_OK。然后必须派给持久副手心算17乘19，副手只报告答案。主手核对后回复Markdown粗体的323。暗号青松仅记在会话上下文，不写记忆文件。本任务只允许Write/Read这个测试文件以及sidekick/read_sidekick。禁止Bash、Shell、其他文件操作、GUI、联网和加载技能。";
     await page.getByTestId("two-code-composer").fill(prompt);
@@ -164,6 +196,39 @@ try {
     const taskPath = path.join(root, "data/tasks", files[0]);
     const first = JSON.parse(await fs.readFile(taskPath, "utf8"));
     assert.equal(first.sidekick.status, "completed");
+    assert(first.events.some((e) => e.role === "lead" && e.kind === "reasoning" && e.text));
+    const nativeChildRecords = (await fs.readFile(first.sidekick.sessionId, "utf8"))
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line));
+    const nativeChildThought = nativeChildRecords
+      .flatMap((r) => (r.message?.role === "assistant" ? (r.message.content ?? []) : []))
+      .filter((b) => b.type === "thinking")
+      .map((b) => b.thinking || "")
+      .join("");
+    const projectedChildThought = first.events
+      .filter((e) => e.role === "sidekick" && e.kind === "reasoning")
+      .map((e) => e.text)
+      .join("");
+    assert.equal(
+      projectedChildThought,
+      nativeChildThought,
+      "Pi thought stream must match its native transcript, including no-thought replies",
+    );
+    const workToggle = page.locator('[data-testid^="chat-assistant-history-trigger"]').first();
+    await workToggle.click();
+    await page.getByTestId("chat-reasoning-trigger").first().click();
+    const thoughtContent = page.getByTestId("chat-reasoning-content").first();
+    await thoughtContent.waitFor({ state: "visible" });
+    const firstThought = first.events.find(
+      (e) => e.role === "lead" && e.kind === "reasoning" && e.text,
+    );
+    assert((await thoughtContent.innerText()).includes(firstThought.text));
+    await page.screenshot({
+      animations: "disabled",
+      path: path.join(root, "native-reasoning.png"),
+    });
+    await workToggle.click();
     assert(first.usage.some((u) => u.role === "lead" && u.outputTokens > 0));
     assert(first.usage.some((u) => u.role === "sidekick" && u.outputTokens > 0));
     await page.getByTestId("session-statistics-trigger").click();
@@ -197,12 +262,11 @@ try {
     await liveRow.click();
     const beforeReloadUsage = JSON.parse(await fs.readFile(taskPath, "utf8")).usage;
     assert.deepEqual(beforeReloadUsage, first.usage);
-    await page.getByTestId("two-code-lead-model").click();
-    await page.getByRole("menuitem", { name: "管理模型", exact: true }).click();
+    await openPair();
     await page.getByLabel("主手模型", { exact: true }).fill("sonnet");
     await page.getByLabel("副手思考", { exact: true }).selectOption("medium");
     await page.getByRole("button", { name: "保存", exact: true }).click();
-    await page.getByRole("dialog", { name: "模型与脚手架" }).waitFor({ state: "hidden" });
+    await page.getByRole("dialog", { name: "组合设置" }).waitFor({ state: "hidden" });
     await page
       .getByTestId("two-code-composer")
       .fill("请再次交给同一副手，让它复述上次计算结果。主手再告诉我暗号。不用任何其他工具。");
@@ -225,12 +289,13 @@ try {
       .getByRole("button", { name: /^新建任务/ })
       .first()
       .click();
-    await page.getByTestId("two-code-mode").click();
-    await page.getByRole("button", { name: "模型与脚手架", exact: true }).click();
+    await openPair();
     await page.getByLabel("主手脚手架", { exact: true }).selectOption("pi");
     await page.getByLabel("主手提供方", { exact: true }).fill("ds-tencent");
+    await page.getByLabel("主手模型", { exact: true }).fill(preferences.sidekick.model);
     await page.getByLabel("主手思考", { exact: true }).selectOption("high");
     await page.getByLabel("副手脚手架", { exact: true }).selectOption("claude-code");
+    await page.getByLabel("副手模型", { exact: true }).fill(preferences.lead.model);
     await page.getByLabel("副手思考", { exact: true }).selectOption("high");
     await page.getByRole("button", { name: "保存", exact: true }).click();
     await page

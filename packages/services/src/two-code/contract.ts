@@ -40,7 +40,7 @@ export interface TaskEvent {
   seq: number;
   at: string;
   role: ActorRole | "user" | "system";
-  kind: "message" | "tool" | "status" | "error" | "handoff";
+  kind: "message" | "reasoning" | "tool" | "status" | "error" | "handoff";
   text: string;
 }
 export interface ActorState {
