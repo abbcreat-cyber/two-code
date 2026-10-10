@@ -1,6 +1,6 @@
-import { mkdir, readdir, readFile, rename, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import type { TwoCodeTask } from "../contract.js";
 import type { TaskStore } from "../app/ports.js";
 import { parseTask } from "../domain/snapshot.js";
@@ -39,16 +39,8 @@ export class JsonTaskStore implements TaskStore {
     const target = join(this.directory, `${task.id}.json`);
     const work = this.tail
       .catch(() => undefined)
-      .then(async () => {
-        await mkdir(this.directory, { recursive: true });
-        const temporary = `${target}.${randomUUID()}.tmp`;
-        try {
-          await writeFile(temporary, contents, "utf8");
-          await rename(temporary, target);
-        } finally {
-          await unlink(temporary).catch(() => undefined);
-        }
-      });
+      // Windows短暂读锁会让rename报EPERM；共享实现有界重试，持续失败仍向上报错。
+      .then(() => atomicWritePrivateTextFile(target, contents));
     this.tail = work;
     return work;
   }

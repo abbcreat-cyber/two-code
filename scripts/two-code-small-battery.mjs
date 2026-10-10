@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { _electron as electron } from "playwright-core";
+import { runEdgeCases } from "./two-code-edge-cases.mjs";
 const repo = path.resolve(import.meta.dirname, "..");
 const root = process.env.TWO_CODE_QA_ROOT || `D:/Apps/TwoCode/qa/small-battery-${Date.now()}`;
 const workspace = path.join(root, "data/.zcode/workspace/default");
@@ -27,7 +28,7 @@ const executable =
   process.env.TWO_CODE_QA_EXE ||
   (process.env.TWO_CODE_QA_SOURCE === "1"
     ? path.join(repo, "node_modules/electron/dist/electron.exe")
-    : "D:/Apps/TwoCode/releases/0.7.2-final/win-unpacked/Two Code.exe");
+    : "D:/Apps/TwoCode/releases/0.7.3/win-unpacked/Two Code.exe");
 const app = await electron.launch({
   executablePath: executable,
   args: [
@@ -365,19 +366,17 @@ try {
       "reload unsent draft",
     );
   });
-  await checkCase("history-ui", async () => {
-    const stopped = (await tasks()).find(
-      (task) =>
-        task.status === "completed" &&
-        task.events.some((e) => e.kind === "status" && e.text === "正在停止主手与副手"),
-    );
-    assert(stopped, "cancel-resume task is required");
-    await page.locator(`[data-testid*="task-item"][data-testid$="${stopped.id}"]`).click();
-    const tool = page.locator('[data-tool-name="sidekick"]').first();
-    await tool.waitFor();
-    assert.equal(await tool.getAttribute("data-status"), "stopped");
-    await page.getByText("已停止", { exact: true }).first().waitFor();
-    await page.screenshot({ animations: "disabled", path: path.join(root, "cancel-resumed.png") });
+  await runEdgeCases({
+    page,
+    root,
+    workspace,
+    tasks,
+    read,
+    send,
+    fresh,
+    completed,
+    until,
+    checkCase,
   });
   if (errors.length) results.push({ name: "renderer", passed: false, errors });
   await fs.writeFile(

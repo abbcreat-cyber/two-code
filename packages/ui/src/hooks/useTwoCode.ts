@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { HarnessInfo, TwoCodePreferences, TwoCodeTask } from "@zcode/services";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useModelSelectionView } from "@/hooks/useModelSelectionView.js";
+import {
+  readDraftPreferences,
+  saveDraftPreferences,
+  clearSubmittedDraftPreferences,
+} from "@/two-code/draftPreferences.js";
 
 const initial: TwoCodePreferences = {
   dual: true,
@@ -15,11 +20,14 @@ export function useTwoCode(
 ) {
   const service = useWorkspaceServices(workspacePath).twoCodeService;
   const nativeModels = useModelSelectionView(workspacePath);
+  const draftPreferenceKey = `two-code:draft-preferences:${workspacePath}`;
   const [catalog, setCatalog] = useState<HarnessInfo[]>([]);
   const [preferences, setPreferences] = useState<TwoCodePreferences>(initial);
   const [tasks, setTasks] = useState<TwoCodeTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [configuring, setConfiguring] = useState(false);
+  const [defaultsLoading, setDefaultsLoading] = useState(false);
+  const previousActiveId = useRef(activeId);
   const [error, setError] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const pendingRequest = useRef<{ taskId: string; text: string; requestId: string } | null>(null);
@@ -65,7 +73,7 @@ export function useTwoCode(
       .then(([engines, defaults, saved]) => {
         if (!disposed) {
           setCatalog(engines);
-          setPreferences(defaults);
+          setPreferences(readDraftPreferences(localStorage, draftPreferenceKey, defaults));
           // 初始查询在途时仍会收到流式/权限事件；迟到快照不能覆盖已看到的新状态。
           setTasks([
             ...new Map([...saved.map((task) => [task.id, task] as const), ...live]).values(),
@@ -83,7 +91,31 @@ export function useTwoCode(
       subscription.dispose();
       catalogSubscription.dispose();
     };
-  }, [service, workspacePath]);
+  }, [service, workspacePath, draftPreferenceKey]);
+  useEffect(() => {
+    const enteringDraft = previousActiveId.current !== null && activeId === null;
+    previousActiveId.current = activeId;
+    setDefaultsLoading(false);
+    if (!enteringDraft || !service) return;
+    let disposed = false;
+    setDefaultsLoading(true);
+    // 新草稿重新读取已保存默认值；上一个任务的临时选项不能成为隐式全局设置。
+    void service
+      .preferences()
+      .then((value) => {
+        if (!disposed)
+          setPreferences(readDraftPreferences(localStorage, draftPreferenceKey, value));
+      })
+      .catch((cause) => {
+        if (!disposed) setError(String(cause));
+      })
+      .finally(() => {
+        if (!disposed) setDefaultsLoading(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [activeId, service, draftPreferenceKey]);
   const submit = async (text: string) => {
     if (!service || sendingRef.current) return;
     sendingRef.current = true;
@@ -91,9 +123,9 @@ export function useTwoCode(
     try {
       let id = activeId;
       if (!id) {
-        await service.configurePreferences(preferences);
         const task = await service.create({ ...preferences, workspacePath });
         id = task.id;
+        clearSubmittedDraftPreferences(localStorage, draftPreferenceKey, preferences);
         onCreated?.(id);
         upsert(task);
       }
@@ -149,7 +181,7 @@ export function useTwoCode(
     task: tasks.find((task) => task.id === activeId),
     activeId,
     loading,
-    configuring,
+    configuring: configuring || defaultsLoading,
     error,
     submit,
     cancel,
@@ -163,7 +195,10 @@ export function useTwoCode(
       setConfiguring(true);
       try {
         if (activeId) upsert(await service.configure({ taskId: activeId, preferences: value }));
-        else setPreferences(await service.configurePreferences(value));
+        else {
+          saveDraftPreferences(localStorage, draftPreferenceKey, value);
+          setPreferences(value);
+        }
         setError(null);
       } catch (cause) {
         setError(String(cause));
