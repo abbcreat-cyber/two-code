@@ -5,6 +5,7 @@ import type {
   ZCodeTaskListWorkspaceScope,
 } from "@zcode/services";
 import { logger } from "@/logger.js";
+import { updateTaskQueryCacheTaskMetaPreservingMembership } from "@/store/taskQueryCacheStore.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import type { WorkspaceTabState } from "@/store/tabStore.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
@@ -163,6 +164,10 @@ export function useGlobalTaskList(params: {
           ),
         );
         itemsRef.current = nextItems;
+        // 外部脚手架没有ZCode会话快照；将Controller权威元数据交给同一个原生标题缓存。
+        for (const item of nextItems)
+          if (item.taskId.startsWith("two-code:"))
+            updateTaskQueryCacheTaskMetaPreservingMembership(item);
         setItems(nextItems);
         setTotal(result.total);
         setHasMore(result.hasMore);

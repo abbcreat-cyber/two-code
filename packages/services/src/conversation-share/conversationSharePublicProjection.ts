@@ -243,6 +243,7 @@ function projectTimelineMarker(
     case "retryNotice":
       return { ...row.marker };
     case "forkNotice":
+    case "harnessActivity":
     case "forkCreated":
     case "checkpointRestored":
       throwProjectionError(

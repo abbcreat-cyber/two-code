@@ -353,6 +353,7 @@ function arePromptHistoryEntriesEqual(left: readonly string[], right: readonly s
 }
 
 interface ConversationComposerProps {
+  extraControls?: ReactNode;
   snapshot: ConversationSnapshot | null;
   /** 草稿 scope（sessionId；draft 态 null → "__draft__" scope）。 */
   sessionId?: string | null;
@@ -494,6 +495,7 @@ function ConversationComposerImpl({
   createSubmissionFromComposer,
   telemetryDraftConfig,
   contextHeader,
+  extraControls,
   centered = false,
   blockingRequestId = null,
   disabled = false,
@@ -2139,6 +2141,7 @@ function ConversationComposerImpl({
   const leadingActionsNode = useMemo(
     () => (
       <>
+        {extraControls}
         <V4ComposerModeSwitch
           workspacePath={workspacePath}
           workspaceIdentity={workspaceIdentity}
@@ -2178,6 +2181,7 @@ function ConversationComposerImpl({
       remoteSessionId,
       runningSubagentCount,
       snapshot?.backgroundWorks,
+      extraControls,
       workspaceIdentity,
       workspacePath,
     ],

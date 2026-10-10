@@ -7,16 +7,17 @@ const initial: TwoCodePreferences = {
   lead: { harness: "claude-code" },
   sidekick: { harness: "pi" },
 };
-export function useTwoCode(workspacePath: string) {
+export function useTwoCode(
+  workspacePath: string,
+  activeId: string | null,
+  onCreated?: (id: string) => void,
+) {
   const service = useWorkspaceServices(workspacePath).twoCodeService;
   const [catalog, setCatalog] = useState<HarnessInfo[]>([]);
   const [preferences, setPreferences] = useState<TwoCodePreferences>(initial);
   const [tasks, setTasks] = useState<TwoCodeTask[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const activeRef = useRef(activeId);
-  activeRef.current = activeId;
   const sendingRef = useRef(false);
   const pendingRequest = useRef<{ taskId: string; text: string; requestId: string } | null>(null);
   const upsert = useCallback(
@@ -26,9 +27,9 @@ export function useTwoCode(workspacePath: string) {
   );
   useEffect(() => {
     let disposed = false;
+    const live = new Map<string, TwoCodeTask>();
     setLoading(true);
     setTasks([]);
-    setActiveId(null);
     setError(null);
     if (!service) {
       setError("当前宿主未启用 Two Code 服务");
@@ -37,9 +38,13 @@ export function useTwoCode(workspacePath: string) {
     }
     const subscription = service.onDidChange((task) => {
       if (disposed) return;
+      if (
+        task.workspacePath.replaceAll("\\", "/").toLowerCase() !==
+        workspacePath.replaceAll("\\", "/").toLowerCase()
+      )
+        return;
+      live.set(task.id, task);
       setTasks((items) => {
-        if (task.id !== activeRef.current && !items.some((item) => item.id === task.id))
-          return items;
         return [task, ...items.filter((item) => item.id !== task.id)];
       });
     });
@@ -48,7 +53,10 @@ export function useTwoCode(workspacePath: string) {
         if (!disposed) {
           setCatalog(engines);
           setPreferences(defaults);
-          setTasks(saved);
+          // 初始查询在途时仍会收到流式/权限事件；迟到快照不能覆盖已看到的新状态。
+          setTasks([
+            ...new Map([...saved.map((task) => [task.id, task] as const), ...live]).values(),
+          ]);
         }
       })
       .catch((cause) => {
@@ -72,8 +80,7 @@ export function useTwoCode(workspacePath: string) {
         await service.configurePreferences(preferences);
         const task = await service.create({ ...preferences, workspacePath });
         id = task.id;
-        activeRef.current = id;
-        setActiveId(id);
+        onCreated?.(id);
         upsert(task);
       }
       const previous = pendingRequest.current;
@@ -114,12 +121,21 @@ export function useTwoCode(workspacePath: string) {
     tasks,
     task: tasks.find((task) => task.id === activeId),
     activeId,
-    select: setActiveId,
-    newTask: () => setActiveId(null),
     loading,
     error,
     submit,
     cancel,
     respond,
+    savePreferences: async (value: TwoCodePreferences) => {
+      if (!service) return;
+      try {
+        const saved = await service.configurePreferences(value);
+        setPreferences(saved);
+        setError(null);
+      } catch (cause) {
+        setError(String(cause));
+        throw cause;
+      }
+    },
   };
 }

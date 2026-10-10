@@ -1763,6 +1763,8 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
     running: boolean;
   } | null => {
     switch (marker.type) {
+      case "harnessActivity":
+        return { icon: null, label: marker.label, running: false };
       case "compact": {
         const running = marker.status === "running";
         const automaticOptimization = isOfficeMode && marker.origin === "auto";

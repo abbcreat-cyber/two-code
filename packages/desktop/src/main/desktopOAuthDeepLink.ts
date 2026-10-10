@@ -403,6 +403,7 @@ export function registerDeepLinkProtocol(
   options: { iconPath?: string } = {},
 ) {
   const scheme = "two-code";
+  if (process.env.TWO_CODE_BACKGROUND === "1") return;
 
   if (process.defaultApp && process.argv.length >= 2) {
     const entry = resolve(process.argv[1]!);

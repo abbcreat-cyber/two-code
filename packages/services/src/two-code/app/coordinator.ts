@@ -54,6 +54,7 @@ export class TwoCodeCoordinator implements ITwoCodeService {
         await this.deps.store.save(task);
       }
       this.tasks.set(task.id, task);
+      this.changes.fire(copy(task));
     }
   }
   private async task(id: string): Promise<TwoCodeTask> {

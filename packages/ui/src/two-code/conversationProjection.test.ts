@@ -1,0 +1,59 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { conversationRowSchema } from "@zcode/shared/zcode-protocol-v4";
+import type { TwoCodeTask } from "@zcode/services";
+import { projectTwoCodeRows } from "./conversationProjection.js";
+const base: TwoCodeTask = {
+  id: "fixture",
+  title: "任务",
+  workspacePath: "D:/fixture",
+  dual: true,
+  status: "running",
+  updatedAt: "2026-10-10T10:00:00Z",
+  lead: { selection: { harness: "claude-code" }, status: "running" },
+  sidekick: { selection: { harness: "pi" }, status: "running" },
+  permissions: [],
+  requestIds: [],
+  events: [],
+};
+test("native rows preserve identities during streaming and render handoff without duplicating child text", () => {
+  const task = structuredClone(base);
+  const add = (
+    role: TwoCodeTask["events"][number]["role"],
+    kind: TwoCodeTask["events"][number]["kind"],
+    text: string,
+  ) => task.events.push({ seq: task.events.length + 1, at: task.updatedAt, role, kind, text });
+  add("user", "message", "验证乘法");
+  add("lead", "message", "交给");
+  add("lead", "message", "副手。");
+  add("lead", "handoff", "算17*19");
+  add("sidekick", "message", "323");
+  const first = projectTwoCodeRows(task);
+  first.forEach((r) => conversationRowSchema.parse(r));
+  assert.equal(first.filter((r) => r.kind === "assistantText").length, 1);
+  assert.equal(first.find((r) => r.kind === "toolCall")?.output?.text, "323");
+  add("sidekick", "status", "执行已结束，待核对结果");
+  add("lead", "message", "**323**，核对通过。");
+  task.status = "completed";
+  const final = projectTwoCodeRows(task);
+  final.forEach((r) => conversationRowSchema.parse(r));
+  assert.deepEqual(
+    final.slice(0, first.length).map((r) => r.rowId),
+    first.map((r) => r.rowId),
+  );
+  assert.equal(final.find((r) => r.kind === "turnHeader")?.state, "completedSuccess");
+  assert.equal(final.find((r) => r.kind === "toolCall")?.status, "success");
+  assert.equal(new Set(final.map((r) => r.rowId)).size, final.length);
+});
+test("cancelled handoff never appears as success in native timeline", () => {
+  const task = structuredClone(base);
+  task.status = "cancelled";
+  task.sidekick.status = "cancelled";
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "运行" },
+    { seq: 2, at: task.updatedAt, role: "lead", kind: "handoff", text: "执行" },
+  ];
+  const rows = projectTwoCodeRows(task);
+  assert.equal(rows.find((r) => r.kind === "turnHeader")?.state, "completedInterrupted");
+  assert.equal(rows.find((r) => r.kind === "toolCall")?.status, "cancelled");
+});

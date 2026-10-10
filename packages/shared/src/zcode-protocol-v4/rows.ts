@@ -330,6 +330,8 @@ export type HookInvocationRow = z.infer<typeof hookInvocationRowSchema>;
 // timelineMarker。
 // compact.status=cancelled 表示 auto compact 被 stop；失败终态为 failed。
 export const timelineMarkerPayloadSchema = z.union([
+  // 外部脚手架的调用记录只说明已观察到活动，不伪造工具执行结果。
+  z.object({ type: z.literal("harnessActivity"), label: z.string() }),
   z.object({
     type: z.literal("compact"),
     origin: z.enum(["manual", "auto"]),

@@ -2945,16 +2945,19 @@ export function createZCodeTaskServiceAdapter(
           titleLength: meta.title.length,
         });
         try {
-          const ack = await options.zcodeAgentService.sendConversationCommandV4({
-            workspacePath: params.workspacePath,
-            workspaceIdentity: params.workspaceIdentity,
-            envelope: createHostCommandEnvelope({
-              type: "renameSession",
-              sessionId: params.taskId,
-              payload: { title: params.title },
-            }),
-          });
-          assertV4CommandAckOk("renameSession", ack, `session=${params.taskId}`);
+          // 多脚手架任务的标题同样归原生索引，不向不存在的ZCode会话发重命名命令。
+          if (!params.taskId.startsWith("two-code:")) {
+            const ack = await options.zcodeAgentService.sendConversationCommandV4({
+              workspacePath: params.workspacePath,
+              workspaceIdentity: params.workspaceIdentity,
+              envelope: createHostCommandEnvelope({
+                type: "renameSession",
+                sessionId: params.taskId,
+                payload: { title: params.title },
+              }),
+            });
+            assertV4CommandAckOk("renameSession", ack, `session=${params.taskId}`);
+          }
         } catch (error) {
           // 旧侧边栏 rename 过去只写 tasks-index；v4 sessions-index 读 CLI
           // session store，导致手动标题在新侧边栏丢失。这里尽力同步 renameSession，

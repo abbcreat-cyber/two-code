@@ -2,6 +2,12 @@ import type { Event } from "@zcode/rpc";
 
 export type HarnessId = "zcode" | "claude-code" | "pi";
 export type ActorRole = "lead" | "sidekick";
+export function twoCodeSessionId(id: string): string {
+  return `two-code:${id}`;
+}
+export function twoCodeTaskId(sessionId: string | null | undefined): string | null {
+  return sessionId?.startsWith("two-code:") ? sessionId.slice("two-code:".length) : null;
+}
 export type TaskStatus = "idle" | "running" | "completed" | "cancelled" | "error";
 export interface EngineSelection {
   harness: HarnessId;

@@ -1,7 +1,8 @@
 import { _electron as electron } from "playwright-core";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-const executablePath = "D:/Apps/TwoCode/releases/0.1.0/win-unpacked/Two Code.exe";
+const executablePath =
+  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.2.0/win-unpacked/Two Code.exe";
 const env = {
   ...process.env,
   TWO_CODE_BACKGROUND: "1",
@@ -19,7 +20,7 @@ for (const key of [
 const app = await electron.launch({ executablePath, args: ["--disable-gpu"], env, timeout: 60000 });
 try {
   const page = await app.firstWindow();
-  await page.getByTestId("two-code-workbench").waitFor({ state: "visible", timeout: 30000 });
+  await page.getByTestId("two-code-native-session").waitFor({ state: "visible", timeout: 30000 });
   const identity = await app.evaluate(({ app, BrowserWindow }) => ({
     name: app.name,
     userData: app.getPath("userData"),
@@ -33,11 +34,29 @@ try {
   assert.equal(identity.name, "Two Code");
   assert.equal(identity.userData.replaceAll("\\", "/"), "D:/Apps/TwoCode/state/electron");
   assert(identity.windows.every((w) => w.bounds.x < -1000 && !w.focusable));
-  assert.equal(
-    await page.getByLabel("主手模型", { exact: true }).inputValue(),
-    "claude-sonnet-4-8",
+  assert.match(await page.getByTestId("two-code-lead-model").innerText(), /腾讯 DeepSeek/);
+  assert.match(await page.getByTestId("two-code-sidekick-model").innerText(), /腾讯 DeepSeek/);
+  const savedTasks = (await fs.readdir("D:/Apps/TwoCode/data/tasks")).filter((name) =>
+    name.endsWith(".json"),
   );
-  assert.equal(await page.getByLabel("副手提供方", { exact: true }).inputValue(), "ds-tencent");
+  if (savedTasks.length === 1) {
+    const saved = JSON.parse(
+      await fs.readFile(`D:/Apps/TwoCode/data/tasks/${savedTasks[0]}`, "utf8"),
+    );
+    const row = page.locator(`[data-testid*="task-item"][data-testid$="${saved.id}"]`);
+    await row.waitFor({ state: "visible", timeout: 20000 });
+    await row.click();
+    await page.getByTestId("two-code-state").waitFor({ state: "visible", timeout: 10000 });
+    assert.equal(
+      await page.getByTestId("two-code-state").getAttribute("data-status"),
+      saved.status,
+    );
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].showInactive();
+    });
+    await page.screenshot({ path: "D:/Apps/TwoCode/qa/installed-native-history.png" });
+    console.log(JSON.stringify({ existingTaskOpened: true, id: saved.id }));
+  }
   await fs.writeFile(
     "D:/Apps/TwoCode/qa/installed-identity.json",
     JSON.stringify(identity, null, 2),

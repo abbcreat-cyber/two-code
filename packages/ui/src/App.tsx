@@ -823,7 +823,7 @@ export function App({
     [locale, services.zcodeAgentService, setLocale, theme, setTheme, testMessages],
   );
   useTestActions(testActions);
-  const [workspaceMainView, setWorkspaceMainView] = useState<WorkspaceMainView>("two-code");
+  const [workspaceMainView, setWorkspaceMainView] = useState<WorkspaceMainView>("chat");
   const [openAutomationId, setOpenAutomationId] = useState<string | null>(null);
   const [openAutomationTab, setOpenAutomationTab] = useState<NonNullable<
     AutomationsNavigationTarget["automationTab"]

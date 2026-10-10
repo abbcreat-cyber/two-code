@@ -7,3 +7,5 @@
 UI重开先读快照再消费单调序号变化。Host重启将未完成任务标为可恢复错误，禁止自动重跑。权限等待随取消结束；晚到结果不得覆盖取消。持久化失败必须显式报错。
 
 技术端口和验收见specs/two-code/multi-harness.md。
+
+任务以two-code:<uuid>接入原生任务索引。Coordinator拥有执行事实，原生索引拥有重命名、置顶、分组、归档等组织元数据；展示投影保留这些元数据。前端复用原生SessionPane入口、ConversationTimeline、ChatPromptEditor、ModelConfigSelect和PermissionDialog，不维护第二份可选任务列表。后台投影在服务释放前收尾，查询期间收到的新事件优先于迟到快照。

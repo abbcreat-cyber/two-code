@@ -32,7 +32,7 @@ const child = spawn(
       ...process.env,
       ZCODE_ENV: "production",
       NODE_ENV: "production",
-      ZCODE_DESKTOP_DIST_DIR: "D:/Apps/TwoCode/releases/0.1.0",
+      ZCODE_DESKTOP_DIST_DIR: process.env.TWO_CODE_RELEASE_DIR || "D:/Apps/TwoCode/releases/0.1.0",
     },
   },
 );
