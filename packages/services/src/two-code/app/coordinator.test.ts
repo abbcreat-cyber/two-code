@@ -119,6 +119,7 @@ test("cancel resolves pending permission as denied", async () => {
   });
   const task = await create(service);
   await service.submit({ taskId: task.id, requestId: "one", text: "run" });
+  await new Promise<void>((resolve) => setImmediate(resolve));
   const pending = await service.read(task.id);
   assert.equal(pending.permissions.length, 1);
   const permission = pending.permissions[0];
@@ -129,6 +130,91 @@ test("cancel resolves pending permission as denied", async () => {
     service.respond({ taskId: task.id, permissionId: permission.id, allow: true }),
     /失效/,
   );
+});
+
+test("idle model changes preserve both native sessions and next run uses saved configuration", async () => {
+  const seen: EngineRun[] = [];
+  const { service, stored } = fixture(async (input) => {
+    seen.push(input);
+    if (input.handoff) await input.handoff("delegate");
+    return { text: "ok", sessionId: input.handoff ? "lead-session" : "child-session" };
+  });
+  const task = await create(service);
+  await service.submit({ taskId: task.id, requestId: "first", text: "first" });
+  const first = await settled(service, task.id);
+  const next = await service.configure({
+    taskId: task.id,
+    preferences: {
+      dual: true,
+      mode: "edit",
+      lead: { ...first.lead.selection, model: "new-lead" },
+      sidekick: { ...first.sidekick.selection, model: "new-child" },
+    },
+  });
+  assert.equal(next.lead.sessionId, "lead-session");
+  assert.equal(next.sidekick.sessionId, "child-session");
+  assert.equal(stored.get(task.id)?.mode, "edit");
+  await service.submit({ taskId: task.id, requestId: "second", text: "second" });
+  await settled(service, task.id);
+  assert.deepEqual(
+    seen.slice(2).map((i) => [i.selection.model, i.sessionId, i.mode]),
+    [
+      ["new-lead", "lead-session", "edit"],
+      ["new-child", "child-session", "edit"],
+    ],
+  );
+});
+
+test("busy configuration is rejected and failed configuration save leaves previous choices intact", async () => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => {
+    release = r;
+  });
+  const { service, failSave } = fixture(async () => {
+    await held;
+    return { text: "ok" };
+  });
+  const task = await create(service);
+  const change = {
+    taskId: task.id,
+    preferences: {
+      dual: true,
+      lead: { ...task.lead.selection, model: "new" },
+      sidekick: task.sidekick.selection,
+    },
+  };
+  await service.submit({ taskId: task.id, requestId: "first", text: "run" });
+  await assert.rejects(service.configure(change), /执行/);
+  release();
+  await settled(service, task.id);
+  failSave(true);
+  await assert.rejects(service.configure(change), /disk unavailable/);
+  assert.equal((await service.read(task.id)).lead.selection.model, undefined);
+});
+
+test("cumulative receipts replace earlier values and persist across restart", async () => {
+  const { service, stored } = fixture(async (input) => {
+    const usage = {
+      inputTokens: 4,
+      outputTokens: 2,
+      cacheReadTokens: 6,
+      cacheWriteTokens: 1,
+      steps: 1,
+      modelMs: 100,
+      toolMs: null,
+      ttftMs: null,
+    };
+    await input.usage?.(usage);
+    await input.usage?.({ ...usage, outputTokens: 5 });
+    return { text: "ok" };
+  });
+  const task = await create(service);
+  await service.submit({ taskId: task.id, requestId: "first", text: "run" });
+  const result = await settled(service, task.id);
+  assert.equal(result.usage?.length, 1);
+  assert.equal(result.usage?.[0]?.outputTokens, 5);
+  const restored = fixture(async () => ({ text: "unused" }), [...stored.values()]);
+  assert.deepEqual((await restored.service.read(task.id)).usage, result.usage);
 });
 test("restart marks unfinished work for explicit recovery without rerunning", async () => {
   const first = fixture(async () => ({ text: "ok" }));

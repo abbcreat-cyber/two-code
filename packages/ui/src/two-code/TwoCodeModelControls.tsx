@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button.js";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.js";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog.js";
 import { RoleCard } from "./RoleCard.js";
+import { ConfigSelect } from "@/chat-input-toolbar/display.js";
+import { getZCodeAgentAvailableModes, ZCODE_AGENT_PROVIDER } from "@zcode/shared";
+import type { TwoCodeMode } from "@zcode/services";
 
 export function TwoCodeModelControls({
   value,
@@ -78,7 +81,7 @@ export function TwoCodeModelControls({
         showManageModelsAction
         manageModelsLabel="管理模型"
         focusSelectorOnClose='[data-testid="two-code-composer"]'
-        lockReasonMessage="本任务保留当前组合"
+        lockReasonMessage="执行中，请停止后更换"
         isItemLocked={() => false}
         onValueChange={(encoded) => {
           const [provider, model] = JSON.parse(encoded);
@@ -101,6 +104,29 @@ export function TwoCodeModelControls({
   };
   return (
     <>
+      <ConfigSelect
+        option={{
+          id: "mode",
+          name: "模式",
+          category: "mode",
+          type: "select",
+          currentValue: value.mode ?? "build",
+          options: [...getZCodeAgentAvailableModes()]
+            .sort(
+              (a, b) =>
+                ["plan", "build", "edit", "yolo"].indexOf(a.id) -
+                ["plan", "build", "edit", "yolo"].indexOf(b.id),
+            )
+            .map((m) => ({ value: m.id, name: m.name })),
+        }}
+        provider={ZCODE_AGENT_PROVIDER}
+        onValueChange={(mode) => void save({ ...value, mode: mode as TwoCodeMode })}
+        disabled={locked || saving}
+        tooltipTitle="权限模式"
+        triggerSize="sm"
+        labelVisibilityClassName="inline-flex"
+        restoreFocusSelector='[data-testid="two-code-composer"]'
+      />
       <Popover>
         <PopoverTrigger asChild>
           <Button
@@ -143,7 +169,9 @@ export function TwoCodeModelControls({
             </Button>
           )}
           {locked && (
-            <p className="px-2 py-1 text-ui-xs text-foreground-subtle">切换组合请新建任务</p>
+            <p className="px-2 py-1 text-ui-xs text-foreground-subtle">
+              执行结束或停止后即可更换模型
+            </p>
           )}
         </PopoverContent>
       </Popover>
@@ -153,7 +181,7 @@ export function TwoCodeModelControls({
         <DialogContent className="max-w-xl">
           <DialogTitle>模型与脚手架</DialogTitle>
           <DialogDescription>
-            分别选择主手和副手。模型配置沿用本机脚手架，保存后用于新任务。
+            分别选择主手和副手，保存后从下一轮生效。同脚手架更换模型保留上下文。
           </DialogDescription>
           <div className="grid gap-3 sm:grid-cols-2">
             <RoleCard

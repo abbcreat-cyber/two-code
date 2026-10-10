@@ -2,6 +2,19 @@ import type { Event } from "@zcode/rpc";
 
 export type HarnessId = "zcode" | "claude-code" | "pi";
 export type ActorRole = "lead" | "sidekick";
+export type TwoCodeMode = "plan" | "build" | "edit" | "yolo";
+export interface RunUsage {
+  id: string;
+  role: ActorRole;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  steps: number;
+  modelMs: number | null;
+  toolMs: number | null;
+  ttftMs: number | null;
+}
 export function twoCodeSessionId(id: string): string {
   return `two-code:${id}`;
 }
@@ -44,6 +57,8 @@ export interface PermissionRequest {
   detail: string;
 }
 export interface TwoCodeTask {
+  mode?: TwoCodeMode;
+  usage?: RunUsage[];
   id: string;
   workspacePath: string;
   title: string;
@@ -58,18 +73,20 @@ export interface TwoCodeTask {
   error?: string;
 }
 export interface CreateTwoCodeTask {
+  mode?: TwoCodeMode;
   workspacePath: string;
   title?: string;
   dual: boolean;
   lead: EngineSelection;
   sidekick: EngineSelection;
 }
-export type TwoCodePreferences = Pick<CreateTwoCodeTask, "dual" | "lead" | "sidekick">;
+export type TwoCodePreferences = Pick<CreateTwoCodeTask, "dual" | "lead" | "sidekick" | "mode">;
 export interface ITwoCodeService {
   catalog(): Promise<HarnessInfo[]>;
   list(workspacePath: string): Promise<TwoCodeTask[]>;
   create(input: CreateTwoCodeTask): Promise<TwoCodeTask>;
   read(taskId: string): Promise<TwoCodeTask>;
+  configure(input: { taskId: string; preferences: TwoCodePreferences }): Promise<TwoCodeTask>;
   submit(input: { taskId: string; requestId: string; text: string }): Promise<TwoCodeTask>;
   cancel(taskId: string): Promise<TwoCodeTask>;
   respond(input: { taskId: string; permissionId: string; allow: boolean }): Promise<void>;

@@ -82,3 +82,27 @@ sequenceDiagram
 6. 工作台真实渲染及交互、权限响应、停止、重开历史验证。后台方式检查，不占用用户鼠标。
 7. 桌面快捷方式和独立应用/托盘图标可用；与原版同时运行不争抢单实例锁。
 8. 执行typecheck、lint、架构检查及相关测试，明确区分通过、基线错误和未完成项。
+
+# 2026-10-10：任务配置与统计
+
+- 已有任务空闲时可独立修改主手、副手模型和思考档位；下轮使用新选择，同脚手架保留原生 sessionId。运行及配置保存期间拒绝并发修改。跨脚手架不复用原生 sessionId；已有原生上下文的角色需新建任务更换脚手架，模型切换不受此限制。
+- 配置由 coordinator 持有，通过任务执行租约串行保存并广播。全局偏好只用于新任务。旧快照缺少模式时按 build（变更前确认）迁移。
+- 复用原生权限选择器：plan 只读且不执行 shell/写入；build 读取可直接执行，修改及 shell 请求确认；edit 自动编辑工作区内文件，shell/工作区外修改仍确认；yolo 完全访问。两角色继承任务模式。Claude/Pi 工具前置门禁执行相同规则；ZCode 使用原生模式。不得依靠提示词替代门禁。
+- 只读复制阶跃星辰实际源项目的 SessionStatisticsBar 及统计类型，保留输入框下方原样位置与弹层。统计来自适配器真实回执，按角色、原生运行唯一编号记账；重启与重放不得重复累计。旧任务未采集的历史不估算。主副手 token 合计，原生 context 不跨角色相加；未知耗时/速率显示空值。
+- 验收：空闲切换两角色模型并复用 session；busy 拒绝、保存失败不污染；四模式真实读写权限；两角色用量求和、重复回执与重启稳定；桌面隐藏窗口检查下拉菜单、统计弹层及位置。源项目文件 hash 前后相同。
+
+```mermaid
+sequenceDiagram
+  participant UI as 原生输入框
+  participant Owner as Two Code coordinator
+  participant Store as 任务文件与租约
+  participant Adapter as Claude / Pi / ZCode
+  UI->>Owner: configure / submit
+  Owner->>Store: 获取同一任务租约并读取最新值
+  Owner->>Store: 保存配置或运行准入
+  Owner-->>UI: 已保存状态
+  Owner->>Adapter: 模型、模式、原生 sessionId
+  Adapter->>Owner: 权限请求 / 真实用量回执
+  Owner->>Store: 去重记账、持久化
+  Owner-->>UI: 统计投影
+```

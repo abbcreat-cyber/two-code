@@ -28,7 +28,11 @@ export class ToolBridge {
     return { url: `${this.origin}/mcp`, headers: { Authorization: `Bearer ${this.token}` } };
   }
   get environment() {
-    return { TWO_CODE_TOOL_URL: `${this.origin}/tool`, TWO_CODE_TOOL_TOKEN: this.token };
+    return {
+      TWO_CODE_TOOL_URL: `${this.origin}/tool`,
+      TWO_CODE_TOOL_TOKEN: this.token,
+      TWO_CODE_HAS_SIDEKICK: this.input.handoff ? "1" : "0",
+    };
   }
   async start(): Promise<void> {
     this.server = createServer(async (request, response) => {
@@ -106,6 +110,13 @@ export class ToolBridge {
   }
   private invoke(name: string, args: Record<string, unknown>): Promise<string> {
     this.input.signal.throwIfAborted();
+    if (name === "permission") {
+      if (typeof args.tool !== "string" || typeof args.detail !== "string")
+        throw new Error("权限参数无效");
+      return this.input
+        .permission(args.tool, args.detail)
+        .then((allow) => (allow ? "allow" : "deny"));
+    }
     if (name === "sidekick" && this.input.handoff) {
       if (
         typeof args.message !== "string" ||
@@ -129,6 +140,13 @@ export class ToolBridge {
 export const piToolExtension = `
 import { Type } from '@earendil-works/pi-ai';
 export default function(pi) {
+  pi.on('tool_call', async (event) => {
+    if (['sidekick','read_sidekick'].includes(event.toolName)) return;
+    const r = await fetch(process.env.TWO_CODE_TOOL_URL, {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN},body:JSON.stringify({name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}})});
+    const result = await r.json();
+    if (!r.ok || result.text !== 'allow') return {block:true,reason:'Two Code任务权限模式未允许此操作'};
+  });
+  if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
   const call = async (name, args, signal) => {
     const r = await fetch(process.env.TWO_CODE_TOOL_URL, { method:'POST', signal, headers:{'content-type':'application/json', authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN}, body:JSON.stringify({name, arguments:args}) });
     const result = await r.json(); if(!r.ok) throw Error(result.error || '派工失败');

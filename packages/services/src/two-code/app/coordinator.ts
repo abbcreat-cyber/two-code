@@ -10,10 +10,13 @@ import type {
   TwoCodePreferences,
 } from "../contract.js";
 import type { CoordinatorDependencies, EngineReport, HarnessAdapter } from "./ports.js";
+import { parsePreferences } from "../domain/snapshot.js";
+import { permissionDecision } from "./permission-policy.js";
 import {
   appendEvent,
   leadInstruction,
   newTask,
+  reconfigureTask,
   sidekickInstruction,
   validateSelection,
 } from "../domain/task.js";
@@ -36,6 +39,7 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 export class TwoCodeCoordinator implements ITwoCodeService {
   private readonly tasks = new Map<string, TwoCodeTask>();
   private readonly active = new Map<string, ActiveRun>();
+  private readonly configuring = new Set<string>();
   private readonly changes = new Emitter<TwoCodeTask>();
   private readonly ready: Promise<void>;
   readonly onDidChange = this.changes.event;
@@ -84,6 +88,7 @@ export class TwoCodeCoordinator implements ITwoCodeService {
     );
   }
   async configurePreferences(input: TwoCodePreferences): Promise<TwoCodePreferences> {
+    input = parsePreferences(input);
     validateSelection(input.lead);
     validateSelection(input.sidekick);
     if (typeof input.dual !== "boolean" || !this.deps.preferences) throw new Error("配置不可保存");
@@ -103,7 +108,11 @@ export class TwoCodeCoordinator implements ITwoCodeService {
   async create(input: CreateTwoCodeTask): Promise<TwoCodeTask> {
     await this.ready;
     const workspacePath = await this.deps.validateWorkspace(input.workspacePath);
-    const task = newTask(randomUUID(), { ...input, workspacePath }, new Date().toISOString());
+    const task = newTask(
+      randomUUID(),
+      { ...input, ...parsePreferences(input), workspacePath },
+      new Date().toISOString(),
+    );
     await this.deps.store.save(task);
     this.tasks.set(task.id, task);
     this.changes.fire(copy(task));
@@ -112,8 +121,33 @@ export class TwoCodeCoordinator implements ITwoCodeService {
   async read(id: string) {
     return copy(await this.task(id));
   }
+  async configure(input: {
+    taskId: string;
+    preferences: TwoCodePreferences;
+  }): Promise<TwoCodeTask> {
+    await this.ready;
+    const id = input.taskId;
+    const preferences = parsePreferences(input.preferences);
+    if (this.active.has(id) || this.configuring.has(id))
+      throw new Error("任务执行或配置保存中，请稍后更换");
+    this.configuring.add(id);
+    let release: (() => Promise<void>) | undefined;
+    try {
+      release = await this.deps.lease?.acquire(id);
+      const task = await this.task(id);
+      const next = reconfigureTask(task, preferences);
+      await this.deps.store.save(next);
+      this.tasks.set(id, next);
+      this.changes.fire(copy(next));
+      return copy(next);
+    } finally {
+      await release?.();
+      this.configuring.delete(id);
+    }
+  }
   async submit(input: { taskId: string; requestId: string; text: string }): Promise<TwoCodeTask> {
     const task = await this.task(input.taskId);
+    if (this.configuring.has(task.id)) throw new Error("模型配置保存中，请稍后发送");
     if (!input.requestId || input.requestId.length > 200 || !input.text?.trim()) {
       throw new Error("请求编号和任务内容不能为空");
     }
@@ -185,6 +219,14 @@ export class TwoCodeCoordinator implements ITwoCodeService {
     detail: string,
   ) {
     this.current(task, run);
+    const decision = await permissionDecision(
+      task.mode ?? "build",
+      title,
+      detail,
+      task.workspacePath,
+    );
+    this.current(task, run);
+    if (decision !== "ask") return decision === "allow";
     const id = randomUUID();
     const answer = new Promise<boolean>((resolve) => run.permissions.set(id, resolve));
     task.permissions.push({ id, role, title, detail });
@@ -217,7 +259,19 @@ export class TwoCodeCoordinator implements ITwoCodeService {
     actor.status = "running";
     this.emit(task, role, "status", "开始执行");
     try {
+      const usageId = randomUUID();
       const report = await adapter.run({
+        mode: task.mode ?? "build",
+        usage: async (usage) => {
+          this.current(task, run);
+          // 每次适配器运行回执替换同一记录；不能把累计回执重复相加。
+          task.usage = [
+            ...(task.usage ?? []).filter((item) => item.id !== usageId),
+            { ...usage, id: usageId, role },
+          ];
+          await this.deps.store.save(task);
+          this.changes.fire(copy(task));
+        },
         cwd: task.workspacePath,
         sessionDir: join(this.deps.sessionRoot, task.id, role),
         selection: actor.selection,

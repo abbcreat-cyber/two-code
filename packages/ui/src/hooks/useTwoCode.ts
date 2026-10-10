@@ -17,6 +17,7 @@ export function useTwoCode(
   const [preferences, setPreferences] = useState<TwoCodePreferences>(initial);
   const [tasks, setTasks] = useState<TwoCodeTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sendingRef = useRef(false);
   const pendingRequest = useRef<{ taskId: string; text: string; requestId: string } | null>(null);
@@ -122,19 +123,23 @@ export function useTwoCode(
     task: tasks.find((task) => task.id === activeId),
     activeId,
     loading,
+    configuring,
     error,
     submit,
     cancel,
     respond,
     savePreferences: async (value: TwoCodePreferences) => {
       if (!service) return;
+      setConfiguring(true);
       try {
-        const saved = await service.configurePreferences(value);
-        setPreferences(saved);
+        if (activeId) upsert(await service.configure({ taskId: activeId, preferences: value }));
+        else setPreferences(await service.configurePreferences(value));
         setError(null);
       } catch (cause) {
         setError(String(cause));
         throw cause;
+      } finally {
+        setConfiguring(false);
       }
     },
   };

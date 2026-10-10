@@ -2,6 +2,7 @@
 export { type ServiceDescriptor, createServiceDescriptor } from "./descriptors.js";
 export { ServiceCollection } from "./collection.js";
 export { ITwoCodeService, twoCodeSessionId, twoCodeTaskId } from "./two-code/contract.js";
+export type { TwoCodeMode, RunUsage } from "./two-code/contract.js";
 export type {
   ActorRole,
   EngineSelection,

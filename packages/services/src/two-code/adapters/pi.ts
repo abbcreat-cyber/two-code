@@ -57,7 +57,7 @@ export class PiAdapter implements HarnessAdapter {
     if (input.selection.model) args.push("--model", input.selection.model);
     if (input.selection.thinking) args.push("--thinking", input.selection.thinking);
     let toolEnvironment = {};
-    if (input.handoff) {
+    {
       this.bridge = new ToolBridge(input);
       await this.bridge.start();
       const extension = join(input.sessionDir, "two-code-tools.mjs");
@@ -147,6 +147,21 @@ export class PiAdapter implements HarnessAdapter {
     if (model.id) await input.emit({ kind: "model", text: `${model.provider ?? ""}/${model.id}` });
     let text = "",
       lastError: string | undefined;
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      steps: 0,
+      modelMs: 0,
+      toolMs: 0,
+      ttftMs: null as number | null,
+    };
+    let modelStart = 0,
+      firstToken = 0,
+      ttftTotal = 0,
+      ttftCount = 0;
+    const tools = new Map<string, number>();
     let resolveRun!: () => void, rejectRun!: (error: Error) => void;
     const settled = new Promise<void>((resolve, reject) => {
       resolveRun = resolve;
@@ -155,22 +170,53 @@ export class PiAdapter implements HarnessAdapter {
     void settled.catch(() => undefined);
     this.onFailure = rejectRun;
     this.onRecord = (record) => {
+      if (record.type === "message_start" && object(record.message).role === "assistant") {
+        modelStart = performance.now();
+        firstToken = 0;
+      }
       if (record.type === "message_update") {
         const delta = object(record.assistantMessageEvent);
+        if (
+          modelStart &&
+          !firstToken &&
+          ["text_delta", "thinking_delta", "toolcall_delta"].includes(String(delta.type))
+        )
+          firstToken = performance.now();
         if (delta.type === "text_delta")
           void input.emit({ kind: "message", text: String(delta.delta ?? "") }).catch(rejectRun);
       } else if (record.type === "message_end") {
         const message = object(record.message);
         if (message.role === "assistant") {
+          const u = object(message.usage);
+          if (typeof u.input === "number" && typeof u.output === "number") {
+            usage.inputTokens += u.input;
+            usage.outputTokens += u.output;
+            usage.cacheReadTokens += Number(u.cacheRead ?? 0);
+            usage.cacheWriteTokens += Number(u.cacheWrite ?? 0);
+            usage.steps++;
+            if (modelStart) usage.modelMs += performance.now() - modelStart;
+            if (firstToken && modelStart) {
+              ttftTotal += firstToken - modelStart;
+              ttftCount++;
+              usage.ttftMs = ttftTotal / ttftCount;
+            }
+            void input.usage?.({ ...usage }).catch(rejectRun);
+          }
+          modelStart = 0;
           text = contentText(message.content);
           lastError = ["error", "aborted"].includes(String(message.stopReason))
             ? String(message.errorMessage ?? message.stopReason)
             : undefined;
         }
       } else if (record.type === "tool_execution_start") {
+        tools.set(String(record.toolCallId), performance.now());
         void input
           .emit({ kind: "tool", text: String(record.toolName ?? "工具执行") })
           .catch(rejectRun);
+      } else if (record.type === "tool_execution_end") {
+        const start = tools.get(String(record.toolCallId));
+        if (start) usage.toolMs += performance.now() - start;
+        tools.delete(String(record.toolCallId));
       } else if (record.type === "extension_ui_request") {
         void input
           .permission(
@@ -201,6 +247,7 @@ export class PiAdapter implements HarnessAdapter {
       const ack = await this.request("prompt", { message: input.prompt });
       if (ack.disposition === "handled") throw new Error("Pi 处理了命令，但未启动模型任务");
       await settled;
+      if (usage.steps) await input.usage?.({ ...usage });
       input.signal.throwIfAborted();
       if (!text) throw new Error("Pi 已结束，但没有可读的最终回复");
       const finalState = await this.request("get_state");

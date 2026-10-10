@@ -187,6 +187,18 @@ export type { SharedContextImportState } from "./shared-context-import.js";
 
 // ── usage。conflation：值未变不下发──
 export const sessionUsageStateSchema = z.object({
+  statistics: z
+    .object({
+      turns: z.number().int().nonnegative(),
+      steps: z.number().int().nonnegative(),
+      toolCalls: z.number().int().nonnegative(),
+      timedSteps: z.number().int().nonnegative(),
+      modelMs: z.number().finite().nonnegative().nullable(),
+      toolMs: z.number().finite().nonnegative().nullable(),
+      averageTtftMs: z.number().finite().nonnegative().nullable(),
+      tokensPerSecond: z.number().finite().nonnegative().nullable(),
+    })
+    .optional(),
   contextWindow: z
     .object({
       usedTokens: z.number(),

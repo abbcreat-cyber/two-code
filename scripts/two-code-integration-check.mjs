@@ -70,14 +70,33 @@ try {
       errors,
     }),
   );
-  await page.screenshot({ path: path.join(root, "initial.png") });
+  await page.screenshot({ animations: "disabled", path: path.join(root, "initial.png") });
   // 实际原生testid在不同版本可能使用不同分隔符，按任务地址严格定位同一个原生行。
   const nativeRow = page.locator(`[data-testid*="task-item"][data-testid$="${legacyId}"]`);
   await nativeRow.waitFor({ state: "visible", timeout: 30000 });
   await nativeRow.click();
   await page.getByText("历史记录", { exact: true }).waitFor({ state: "visible", timeout: 10000 });
+  assert.equal(await page.getByTestId("two-code-lead-model").isEnabled(), true);
+  assert.equal(await page.getByTestId("two-code-sidekick-model").isEnabled(), true);
+  await page.locator('[data-testid="chat-mode-select-trigger"]').click();
+  for (const label of ["计划模式", "变更前确认", "自动编辑", "完全访问"])
+    await page.getByRole("option", { name: new RegExp(label) }).waitFor();
+  await page.screenshot({ animations: "disabled", path: path.join(root, "mode-menu.png") });
+  await page.getByRole("option", { name: /自动编辑/ }).click();
+  await page.getByTestId("two-code-lead-model").click();
+  await page.getByRole("menuitem", { name: "管理模型", exact: true }).click();
+  await page.getByLabel("主手模型", { exact: true }).fill("sonnet");
+  await page.getByLabel("副手思考", { exact: true }).selectOption("medium");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await page.getByRole("dialog", { name: "模型与脚手架" }).waitFor({ state: "hidden" });
+  const configuredLegacy = JSON.parse(
+    await fs.readFile(path.join(root, `data/tasks/${legacyId}.json`), "utf8"),
+  );
+  assert.equal(configuredLegacy.lead.selection.model, "sonnet");
+  assert.equal(configuredLegacy.sidekick.selection.thinking, "medium");
+  assert.equal(configuredLegacy.mode, "edit");
   assert.equal((await page.locator("strong").filter({ hasText: "历史记录" }).count()) > 0, true);
-  await page.screenshot({ path: path.join(root, "history.png") });
+  await page.screenshot({ animations: "disabled", path: path.join(root, "history.png") });
   await nativeRow.click({ button: "right" });
   await page.getByRole("menuitem", { name: "重命名任务", exact: true }).click();
   await page.getByPlaceholder("任务名称", { exact: true }).fill("原生重命名验收");
@@ -113,7 +132,7 @@ try {
     await page.getByTestId("two-code-composer").fill(prompt);
     await page.getByTestId("two-code-send").click();
     await page.getByTestId("two-code-permission").waitFor({ state: "visible", timeout: 90000 });
-    await page.screenshot({ path: path.join(root, "permission.png") });
+    await page.screenshot({ animations: "disabled", path: path.join(root, "permission.png") });
     const deadline = Date.now() + 150000;
     while ((await page.getByTestId("two-code-state").getAttribute("data-status")) === "running") {
       if (Date.now() > deadline) throw new Error("Live integrated task timed out");
@@ -145,13 +164,45 @@ try {
     const taskPath = path.join(root, "data/tasks", files[0]);
     const first = JSON.parse(await fs.readFile(taskPath, "utf8"));
     assert.equal(first.sidekick.status, "completed");
+    assert(first.usage.some((u) => u.role === "lead" && u.outputTokens > 0));
+    assert(first.usage.some((u) => u.role === "sidekick" && u.outputTokens > 0));
+    await page.getByTestId("session-statistics-trigger").click();
+    await page.getByTestId("session-statistics-details").waitFor();
+    await page.screenshot({
+      animations: "disabled",
+      path: path.join(root, "statistics-details.png"),
+    });
+    await page.keyboard.press("Escape");
+    await page.getByTestId("session-statistics-details").waitFor({ state: "hidden" });
+    await page.getByTestId("session-token-usage-trigger").click();
+    await page.getByTestId("session-token-usage-details").waitFor();
+    const totalTokens = first.usage.reduce(
+      (sum, u) => sum + u.inputTokens + u.outputTokens + u.cacheReadTokens + u.cacheWriteTokens,
+      0,
+    );
+    assert(
+      (await page.getByTestId("session-token-usage-details").innerText()).includes(
+        new Intl.NumberFormat("zh-CN").format(totalTokens),
+      ),
+    );
+    await page.screenshot({ animations: "disabled", path: path.join(root, "token-details.png") });
+    await page.keyboard.press("Escape");
+    await page.getByTestId("session-token-usage-details").waitFor({ state: "hidden" });
     const liveRow = page.locator(`[data-testid*="task-item"][data-testid$="${first.id}"]`);
     await liveRow.waitFor({ state: "visible", timeout: 15000 });
     assert.equal((await page.locator("strong").filter({ hasText: "323" }).count()) > 0, true);
-    await page.screenshot({ path: path.join(root, "live.png") });
+    await page.screenshot({ animations: "disabled", path: path.join(root, "live.png") });
     await page.reload();
     await liveRow.waitFor({ state: "visible", timeout: 20000 });
     await liveRow.click();
+    const beforeReloadUsage = JSON.parse(await fs.readFile(taskPath, "utf8")).usage;
+    assert.deepEqual(beforeReloadUsage, first.usage);
+    await page.getByTestId("two-code-lead-model").click();
+    await page.getByRole("menuitem", { name: "管理模型", exact: true }).click();
+    await page.getByLabel("主手模型", { exact: true }).fill("sonnet");
+    await page.getByLabel("副手思考", { exact: true }).selectOption("medium");
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await page.getByRole("dialog", { name: "模型与脚手架" }).waitFor({ state: "hidden" });
     await page
       .getByTestId("two-code-composer")
       .fill("请再次交给同一副手，让它复述上次计算结果。主手再告诉我暗号。不用任何其他工具。");
@@ -165,6 +216,9 @@ try {
     const second = JSON.parse(await fs.readFile(taskPath, "utf8"));
     assert.equal(first.lead.sessionId, second.lead.sessionId);
     assert.equal(first.sidekick.sessionId, second.sidekick.sessionId);
+    assert.equal(second.lead.selection.model, "sonnet");
+    assert.equal(second.sidekick.selection.thinking, "medium");
+    assert(second.usage.length > first.usage.length);
     assert.match(second.lead.lastReport, /青松/);
     assert.match(second.sidekick.lastReport, /323/);
     await page
@@ -202,7 +256,7 @@ try {
     assert.equal(reverse.sidekick.selection.harness, "claude-code");
     assert.equal(reverse.sidekick.status, "completed");
     assert.match(reverse.sidekick.lastReport, /156/);
-    await page.screenshot({ path: path.join(root, "reverse.png") });
+    await page.screenshot({ animations: "disabled", path: path.join(root, "reverse.png") });
     await page
       .getByRole("button", { name: /^新建任务/ })
       .first()
@@ -238,7 +292,9 @@ try {
 } catch (error) {
   const page = (await app.windows())[0];
   if (page) {
-    await page.screenshot({ path: path.join(root, "failure.png") }).catch(() => {});
+    await page
+      .screenshot({ animations: "disabled", path: path.join(root, "failure.png") })
+      .catch(() => {});
     await fs.writeFile(
       path.join(root, "failure.txt"),
       (await page.locator("body").innerText()).slice(0, 10000),

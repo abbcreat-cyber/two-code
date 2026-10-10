@@ -50,6 +50,15 @@ export class ClaudeAdapter implements HarnessAdapter {
       ? (input.selection.thinking as Options["effort"])
       : undefined;
     let text = "";
+    const partialUsage = new Map<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheWriteTokens: number;
+      }
+    >();
     let resultSeen = false;
     try {
       this.active = query({
@@ -74,7 +83,36 @@ export class ClaudeAdapter implements HarnessAdapter {
           ...(effort ? { effort } : {}),
           systemPrompt: { type: "preset", preset: "claude_code", append: input.systemPrompt },
           includePartialMessages: true,
-          permissionMode: "default",
+          permissionMode:
+            input.mode === "yolo"
+              ? "bypassPermissions"
+              : input.mode === "plan"
+                ? "plan"
+                : "default",
+          allowDangerouslySkipPermissions: input.mode === "yolo",
+          // PreToolUse也覆盖本机已允许的工具，避免本机allow规则绕开本任务的权限模式。
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  async (event) => {
+                    if (event.hook_event_name !== "PreToolUse") return {};
+                    const allow = await input.permission(
+                      event.tool_name,
+                      JSON.stringify(event.tool_input),
+                    );
+                    return {
+                      hookSpecificOutput: {
+                        hookEventName: "PreToolUse",
+                        permissionDecision: allow ? "allow" : "deny",
+                        permissionDecisionReason: "Two Code任务权限模式",
+                      },
+                    };
+                  },
+                ],
+              },
+            ],
+          },
           disallowedTools: ["Agent", "Task"],
           ...(tools.length
             ? {
@@ -100,6 +138,32 @@ export class ClaudeAdapter implements HarnessAdapter {
           if (event.type === "content_block_delta" && event.delta.type === "text_delta")
             await input.emit({ kind: "message", text: event.delta.text });
         } else if (message.type === "assistant") {
+          const u = message.message.usage;
+          if (u) {
+            partialUsage.set(message.message.id, {
+              inputTokens: u.input_tokens,
+              outputTokens: u.output_tokens,
+              cacheReadTokens: u.cache_read_input_tokens ?? 0,
+              cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+            });
+            const totals = [...partialUsage.values()].reduce(
+              (sum, item) => ({
+                inputTokens: sum.inputTokens + item.inputTokens,
+                outputTokens: sum.outputTokens + item.outputTokens,
+                cacheReadTokens: sum.cacheReadTokens + item.cacheReadTokens,
+                cacheWriteTokens: sum.cacheWriteTokens + item.cacheWriteTokens,
+              }),
+              { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+            );
+            // 同一个assistant id会分块重复到达；保留最新值，最终result再替换本轮回执。
+            await input.usage?.({
+              ...totals,
+              steps: partialUsage.size,
+              modelMs: null,
+              toolMs: null,
+              ttftMs: null,
+            });
+          }
           for (const block of message.message.content) {
             if (block.type === "tool_use") await input.emit({ kind: "tool", text: block.name });
           }
@@ -107,6 +171,22 @@ export class ClaudeAdapter implements HarnessAdapter {
           await input.emit({ kind: "model", text: message.model });
         } else if (message.type === "result") {
           resultSeen = true;
+          const totals = Object.values(message.modelUsage).reduce(
+            (sum, u) => ({
+              inputTokens: sum.inputTokens + u.inputTokens,
+              outputTokens: sum.outputTokens + u.outputTokens,
+              cacheReadTokens: sum.cacheReadTokens + u.cacheReadInputTokens,
+              cacheWriteTokens: sum.cacheWriteTokens + u.cacheCreationInputTokens,
+            }),
+            { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+          );
+          await input.usage?.({
+            ...totals,
+            steps: message.num_turns,
+            modelMs: message.duration_api_ms,
+            toolMs: null,
+            ttftMs: message.subtype === "success" ? (message.ttft_ms ?? null) : null,
+          });
           if (message.subtype !== "success" || message.is_error)
             throw new Error(
               message.subtype === "success" ? message.result : message.errors.join("\n"),

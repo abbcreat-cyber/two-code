@@ -4,12 +4,16 @@ import type {
   HarnessInfo,
   TwoCodeTask,
   TwoCodePreferences,
+  TwoCodeMode,
+  RunUsage,
 } from "../contract.js";
 export interface EngineEvent {
   kind: "message" | "tool" | "session" | "model";
   text: string;
 }
 export interface EngineRun {
+  mode?: TwoCodeMode;
+  usage?(usage: Omit<RunUsage, "id" | "role">): Promise<void>;
   cwd: string;
   sessionDir: string;
   selection: EngineSelection;

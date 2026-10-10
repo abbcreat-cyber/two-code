@@ -2,7 +2,7 @@ import { _electron as electron } from "playwright-core";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 const executablePath =
-  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.2.0/win-unpacked/Two Code.exe";
+  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.3.0-final/win-unpacked/Two Code.exe";
 const env = {
   ...process.env,
   TWO_CODE_BACKGROUND: "1",
@@ -39,10 +39,8 @@ try {
   const savedTasks = (await fs.readdir("D:/Apps/TwoCode/data/tasks")).filter((name) =>
     name.endsWith(".json"),
   );
-  if (savedTasks.length === 1) {
-    const saved = JSON.parse(
-      await fs.readFile(`D:/Apps/TwoCode/data/tasks/${savedTasks[0]}`, "utf8"),
-    );
+  for (const filename of savedTasks) {
+    const saved = JSON.parse(await fs.readFile(`D:/Apps/TwoCode/data/tasks/${filename}`, "utf8"));
     const row = page.locator(`[data-testid*="task-item"][data-testid$="${saved.id}"]`);
     await row.waitFor({ state: "visible", timeout: 20000 });
     await row.click();
@@ -51,6 +49,9 @@ try {
       await page.getByTestId("two-code-state").getAttribute("data-status"),
       saved.status,
     );
+    assert.equal(await page.getByTestId("two-code-lead-model").isEnabled(), true);
+    assert.equal(await page.getByTestId("two-code-sidekick-model").isEnabled(), true);
+    await page.getByTestId("chat-mode-select-trigger").waitFor({ state: "visible" });
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].showInactive();
     });

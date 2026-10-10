@@ -14,6 +14,8 @@ import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
 import type { SessionPaneProps } from "@/v4/SessionPane.js";
 import { projectTwoCodeRows } from "./conversationProjection.js";
 import { TwoCodeModelControls } from "./TwoCodeModelControls.js";
+import { SessionStatisticsBar } from "@/v4/composer/SessionStatisticsBar.js";
+import { projectTwoCodeUsage } from "./usageProjection.js";
 
 export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => void }) {
   const id = twoCodeTaskId(props.sessionId);
@@ -69,7 +71,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     ],
   );
   const send = (value: string) => {
-    if (busy || sending || state.loading || !value.trim()) return false;
+    if (busy || sending || state.loading || state.configuring || !value.trim()) return false;
     setSending(true);
     void state
       .submit(value)
@@ -86,7 +88,12 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     return false;
   };
   const selection = task
-    ? { dual: task.dual, lead: task.lead.selection, sidekick: task.sidekick.selection }
+    ? {
+        dual: task.dual,
+        lead: task.lead.selection,
+        sidekick: task.sidekick.selection,
+        mode: task.mode,
+      }
     : state.preferences;
   const permission = task?.permissions[0];
   const dock = (
@@ -144,7 +151,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           submitTestId="two-code-send"
           submitLabel="发送"
           submitting={sending}
-          submitDisabled={busy || state.loading || sending || !text.trim()}
+          submitDisabled={busy || state.loading || state.configuring || sending || !text.trim()}
           enableMentionPanel={false}
           onChange={(value) => {
             setText(value);
@@ -155,9 +162,9 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
             <TwoCodeModelControls
               value={selection}
               catalog={state.catalog}
-              locked={!!id || state.loading}
+              locked={busy || sending || state.loading || state.configuring || !!props.readOnly}
               onChange={state.savePreferences}
-              onNative={props.onNative}
+              onNative={id ? undefined : props.onNative}
             />
           }
           submitControl={
@@ -174,6 +181,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           }
         />
       )}
+      <SessionStatisticsBar usage={projectTwoCodeUsage(task)} />
       {task && (
         <div
           className="mt-2 flex justify-end gap-2 text-ui-xs text-foreground-subtlest"

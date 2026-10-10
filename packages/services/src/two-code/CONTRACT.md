@@ -8,4 +8,8 @@ UI重开先读快照再消费单调序号变化。Host重启将未完成任务�
 
 技术端口和验收见specs/two-code/multi-harness.md。
 
+configure({ taskId, preferences })在空闲时修改本任务的主副手模型、模式和单/双角色开关；与submit共用执行租约，同脚手架保留sessionId。configurePreferences只修改新任务默认值。旧快照模式默认为build，usage默认为空，不能估算旧token。
+
+EngineRun携带本轮mode和usage回执入口。Claude的工具前置钩子、Pi的tool_call扩展统一经过任务权限裁决；ZCode通过原生sendText的mode/planEnabled提交。按角色运行编号替换累计回执，避免分块与最终结算重复计费。UI只投影已采集用量，不把主副手contextWindow相加。
+
 任务以two-code:<uuid>接入原生任务索引。Coordinator拥有执行事实，原生索引拥有重命名、置顶、分组、归档等组织元数据；展示投影保留这些元数据。前端复用原生SessionPane入口、ConversationTimeline、ChatPromptEditor、ModelConfigSelect和PermissionDialog，不维护第二份可选任务列表。后台投影在服务释放前收尾，查询期间收到的新事件优先于迟到快照。

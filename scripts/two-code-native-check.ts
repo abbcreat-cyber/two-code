@@ -96,10 +96,20 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   const previous = await service.read(task.id);
+  assert(previous.usage?.length && previous.usage[0]!.outputTokens > 0);
+  await service.configure({
+    taskId: task.id,
+    preferences: {
+      dual: false,
+      mode: "edit",
+      lead: task.lead.selection,
+      sidekick: task.sidekick.selection,
+    },
+  });
   await service.submit({
     taskId: task.id,
     requestId: randomUUID(),
-    text: "不要调用工具，复述上次你的回复。",
+    text: "权限模式已切换为自动编辑。只用写文件工具创建native-mode.txt，内容恰为NATIVE_MODE_OK；不调用shell、联网或其他工具。然后复述上次你的回复。",
   });
   const followupDeadline = Date.now() + 90000;
   while ((await service.read(task.id)).status === "running") {
@@ -113,6 +123,11 @@ try {
   assert.equal(followup.status, "completed", followup.error);
   assert.equal(followup.lead.sessionId, previous.lead.sessionId);
   assert.match(followup.lead.lastReport ?? "", /原生通路42/);
+  assert.equal(
+    await fs.readFile(path.join(root, "workspace/native-mode.txt"), "utf8"),
+    "NATIVE_MODE_OK",
+  );
+  assert.equal(followup.usage?.length, 2);
   await fs.writeFile(path.join(root, "followup.json"), JSON.stringify(followup, null, 2));
   console.log(JSON.stringify({ nativeFollowupPassed: true, root }));
 } finally {

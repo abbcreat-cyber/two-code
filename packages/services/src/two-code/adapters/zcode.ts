@@ -87,6 +87,7 @@ export class ZCodeAdapter implements HarnessAdapter {
       sessionId = created.result.sessionId;
     }
     this.session = { workspacePath: input.cwd, sessionId };
+    const beforeUsage = await this.agent.getTaskTokenUsage(this.session);
     await input.emit({ kind: "session", text: sessionId });
     let inputId: string | undefined;
     const buffered: ZCodeAgentServiceEvent[] = [];
@@ -147,6 +148,10 @@ export class ZCodeAdapter implements HarnessAdapter {
       input.signal.throwIfAborted();
       const ack = await this.command("sendText", {
         text: `${input.systemPrompt}\n\n本次任务：\n${input.prompt}`,
+        // 与原生输入框相同，随本轮Submission冻结配置；独立切换命令需要CAS版本。
+        mode: input.mode === "plan" ? "build" : (input.mode ?? "build"),
+        planEnabled: input.mode === "plan",
+        ...(model ? { modelSelection: model } : {}),
         toolDisallowlist: ["Agent", "Task"],
       });
       if (ack.result?.type !== "inputAccepted") throw new Error("ZCode 未返回可关联的输入确认");
@@ -154,6 +159,29 @@ export class ZCodeAdapter implements HarnessAdapter {
       for (const item of buffered) handle(item);
       const text = await done;
       input.signal.throwIfAborted();
+      const afterUsage = await this.agent.getTaskTokenUsage(this.session);
+      const delta = (
+        key:
+          | "inputTokens"
+          | "outputTokens"
+          | "cacheReadTokens"
+          | "cacheCreationTokens"
+          | "modelRequestCount",
+      ) => Math.max(0, afterUsage[key] - beforeUsage[key]);
+      // 原生usage的input包含缓存；展示组件约定input仅为未缓存输入。
+      await input.usage?.({
+        inputTokens: Math.max(
+          0,
+          delta("inputTokens") - delta("cacheReadTokens") - delta("cacheCreationTokens"),
+        ),
+        outputTokens: delta("outputTokens"),
+        cacheReadTokens: delta("cacheReadTokens"),
+        cacheWriteTokens: delta("cacheCreationTokens"),
+        steps: delta("modelRequestCount"),
+        modelMs: null,
+        toolMs: null,
+        ttftMs: null,
+      });
       return { text, sessionId };
     } finally {
       subscription.dispose();

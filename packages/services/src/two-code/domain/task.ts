@@ -1,4 +1,28 @@
-import type { CreateTwoCodeTask, EngineSelection, TaskEvent, TwoCodeTask } from "../contract.js";
+import type {
+  CreateTwoCodeTask,
+  EngineSelection,
+  TaskEvent,
+  TwoCodeTask,
+  TwoCodePreferences,
+} from "../contract.js";
+
+export function reconfigureTask(task: TwoCodeTask, preferences: TwoCodePreferences): TwoCodeTask {
+  validateSelection(preferences.lead);
+  validateSelection(preferences.sidekick);
+  if (task.status === "running") throw new Error("任务仍在执行，请先停止");
+  const next = structuredClone(task);
+  for (const role of ["lead", "sidekick"] as const) {
+    // 原生会话ID只属于原脚手架；换模型保留上下文，不能跨脚手架误用。
+    if (next[role].sessionId && next[role].selection.harness !== preferences[role].harness)
+      throw new Error("已有上下文的脚手架请在新任务中更换；本任务可直接更换模型");
+    next[role].selection = { ...preferences[role] };
+    next[role].actualModel = undefined;
+  }
+  next.mode = preferences.mode;
+  next.dual = preferences.dual;
+  next.updatedAt = new Date().toISOString();
+  return next;
+}
 
 export function validateSelection(selection: EngineSelection): void {
   if (!selection || !["zcode", "claude-code", "pi"].includes(selection.harness)) {
@@ -23,6 +47,8 @@ export function newTask(id: string, input: CreateTwoCodeTask, updatedAt: string)
   validateSelection(input.sidekick);
   if (typeof input.dual !== "boolean") throw new Error("请选择单角色或双角色");
   return {
+    mode: input.mode ?? "build",
+    usage: [],
     id,
     workspacePath: input.workspacePath,
     title: input.title?.trim().slice(0, 120) || "新任务",

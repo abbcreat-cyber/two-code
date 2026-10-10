@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { TwoCodePreferences, TwoCodeTask } from "../contract.js";
 const status = z.enum(["idle", "running", "completed", "cancelled", "error"]);
 const role = z.enum(["lead", "sidekick"]);
+const mode = z.enum(["plan", "build", "edit", "yolo"]).default("build");
 const selection = z.object({
   harness: z.enum(["zcode", "claude-code", "pi"]),
   provider: z.string().max(300).optional(),
@@ -10,7 +11,7 @@ const selection = z.object({
   thinking: z.string().max(300).optional(),
 });
 export function parsePreferences(value: unknown): TwoCodePreferences {
-  return z.object({ dual: z.boolean(), lead: selection, sidekick: selection }).parse(value);
+  return z.object({ dual: z.boolean(), lead: selection, sidekick: selection, mode }).parse(value);
 }
 const actor = z.object({
   selection,
@@ -20,6 +21,23 @@ const actor = z.object({
   lastReport: z.string().optional(),
 });
 const schema = z.object({
+  mode,
+  usage: z
+    .array(
+      z.object({
+        id: z.string(),
+        role,
+        inputTokens: z.number().nonnegative().finite(),
+        outputTokens: z.number().nonnegative().finite(),
+        cacheReadTokens: z.number().nonnegative().finite(),
+        cacheWriteTokens: z.number().nonnegative().finite(),
+        steps: z.number().int().nonnegative(),
+        modelMs: z.number().nonnegative().finite().nullable(),
+        toolMs: z.number().nonnegative().finite().nullable(),
+        ttftMs: z.number().nonnegative().finite().nullable(),
+      }),
+    )
+    .default([]),
   id: z.uuid(),
   workspacePath: z.string().min(1),
   title: z.string(),
