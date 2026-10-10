@@ -29,6 +29,15 @@ export function useTwoCode(
   const [defaultsLoading, setDefaultsLoading] = useState(false);
   const previousActiveId = useRef(activeId);
   const [error, setError] = useState<string | null>(null);
+  const [commandErrors, setCommandErrors] = useState<Record<string, string | undefined>>({});
+  const commandKey = (id: string | null) => `${workspacePath}:${id ?? "draft"}`;
+  const setCommandError = (id: string | null, cause?: unknown) => {
+    const key = commandKey(id);
+    setCommandErrors((previous) => ({
+      ...previous,
+      [key]: cause === undefined ? undefined : String(cause),
+    }));
+  };
   const sendingRef = useRef(false);
   const pendingRequest = useRef<{ taskId: string; text: string; requestId: string } | null>(null);
   const upsert = useCallback(
@@ -119,9 +128,9 @@ export function useTwoCode(
   const submit = async (text: string) => {
     if (!service || sendingRef.current) return;
     sendingRef.current = true;
-    setError(null);
+    setCommandError(activeId);
+    let id = activeId;
     try {
-      let id = activeId;
       if (!id) {
         const task = await service.create({ ...preferences, workspacePath });
         id = task.id;
@@ -129,6 +138,7 @@ export function useTwoCode(
         onCreated?.(id);
         upsert(task);
       }
+      setCommandError(id);
       const previous = pendingRequest.current;
       const request =
         previous?.taskId === id && previous.text === text
@@ -138,7 +148,8 @@ export function useTwoCode(
       upsert(await service.submit(request));
       pendingRequest.current = null;
     } catch (cause) {
-      setError(String(cause));
+      // 新建后的发送失败属于已创建任务；异步回包不能污染用户切换后的视图。
+      setCommandError(id, cause);
       throw cause;
     } finally {
       sendingRef.current = false;
@@ -148,16 +159,18 @@ export function useTwoCode(
     if (!service || !activeId) return;
     try {
       upsert(await service.cancel(activeId));
+      setCommandError(activeId);
     } catch (cause) {
-      setError(String(cause));
+      setCommandError(activeId, cause);
     }
   };
   const respond = async (permissionId: string, allow: boolean) => {
     if (!service || !activeId) return;
     try {
       await service.respond({ taskId: activeId, permissionId, allow });
+      setCommandError(activeId);
     } catch (cause) {
-      setError(String(cause));
+      setCommandError(activeId, cause);
     }
   };
   return {
@@ -182,13 +195,14 @@ export function useTwoCode(
     activeId,
     loading,
     configuring: configuring || defaultsLoading,
-    error,
+    error: commandErrors[commandKey(activeId)] || error,
     submit,
     cancel,
     respond,
     saveDefaults: async (value: TwoCodePreferences) => {
       if (!service) throw new Error("当前宿主未启用 Two Code 服务");
-      setPreferences(await service.configurePreferences(value));
+      // 默认配置由服务拥有，不回填可能已切换到别处的当前草稿。
+      await service.configurePreferences(value);
     },
     savePreferences: async (value: TwoCodePreferences) => {
       if (!service) return;
@@ -199,9 +213,9 @@ export function useTwoCode(
           saveDraftPreferences(localStorage, draftPreferenceKey, value);
           setPreferences(value);
         }
-        setError(null);
+        setCommandError(activeId);
       } catch (cause) {
-        setError(String(cause));
+        setCommandError(activeId, cause);
         throw cause;
       } finally {
         setConfiguring(false);

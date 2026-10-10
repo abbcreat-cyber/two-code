@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import assert from "node:assert/strict";
+import { runContextCases } from "./two-code-context-cases.mjs";
 
 export async function runEdgeCases({
   page,
@@ -14,6 +15,7 @@ export async function runEdgeCases({
   until,
   checkCase,
 }) {
+  await runContextCases({ page, root, tasks, fresh, send, completed, checkCase });
   const mode = async (name) => {
     await page.getByTestId("chat-mode-select-trigger").click();
     await page.getByRole("option", { name: new RegExp(name) }).click();

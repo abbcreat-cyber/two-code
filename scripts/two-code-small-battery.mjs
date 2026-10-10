@@ -28,7 +28,7 @@ const executable =
   process.env.TWO_CODE_QA_EXE ||
   (process.env.TWO_CODE_QA_SOURCE === "1"
     ? path.join(repo, "node_modules/electron/dist/electron.exe")
-    : "D:/Apps/TwoCode/releases/0.7.3/win-unpacked/Two Code.exe");
+    : "D:/Apps/TwoCode/releases/0.7.4/win-unpacked/Two Code.exe");
 const app = await electron.launch({
   executablePath: executable,
   args: [

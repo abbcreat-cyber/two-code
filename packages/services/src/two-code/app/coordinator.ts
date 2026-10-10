@@ -9,7 +9,8 @@ import type {
   TwoCodeTask,
   TwoCodePreferences,
 } from "../contract.js";
-import type { CoordinatorDependencies, EngineReport, HarnessAdapter } from "./ports.js";
+import type { CoordinatorDependencies, EngineReport } from "./ports.js";
+import type { ActiveRun } from "./active-run.js";
 import { parsePreferences } from "../domain/snapshot.js";
 import { permissionDecision } from "./permission-policy.js";
 import { normalizeTaskThinking } from "../domain/thinking.js";
@@ -23,19 +24,6 @@ import {
   validateSelection,
 } from "../domain/task.js";
 
-interface ActiveRun {
-  connections?: Awaited<ReturnType<NonNullable<CoordinatorDependencies["connections"]>>>;
-  id: string;
-  requestId: string;
-  abort: AbortController;
-  actors: Map<ActorRole, HarnessAdapter>;
-  permissions: Map<string, (allow: boolean) => void>;
-  sidekick?: Promise<string>;
-  work?: Promise<void>;
-  admission?: Promise<void>;
-  release?: () => Promise<void>;
-  duplicate?: boolean;
-}
 const copy = (task: TwoCodeTask): TwoCodeTask => structuredClone(task);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -324,6 +312,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       throw new Error("副手仍在执行，请先read_sidekick读取报告；不要重复派工");
     }
     this.emit(task, "lead", "handoff", message);
+    run.sidekickRead = false;
     run.sidekick = this.execute(task, run, "sidekick", sidekickPrompt(task, message)).then(
       (report) => report.text,
     );
@@ -336,8 +325,11 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   private async sidekickResult(task: TwoCodeTask, run: ActiveRun): Promise<string> {
     this.current(task, run);
     if (!run.sidekick) throw new Error("本轮尚未派工");
-    const report = await run.sidekick;
+    const pending = run.sidekick;
+    const report = await pending;
     this.current(task, run);
+    // 只有真正返回给主手的当前报告才算已读；旧调用迟到不能确认新派工。
+    if (run.sidekick === pending) run.sidekickRead = true;
     return `${report}\n\n主手须核对原始要求和产物；执行结束不等于验收通过。`;
   }
   private async runLead(task: TwoCodeTask, run: ActiveRun, prompt: string): Promise<void> {
@@ -345,6 +337,12 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       await this.execute(task, run, "lead", prompt);
       if (run.sidekick && task.sidekick.status === "running") {
         throw new Error("主手结束时副手仍在执行，尚未形成已审查结果");
+      }
+      if (run.sidekick && task.sidekick.status === "error") {
+        throw new Error("副手执行失败，本轮未完成；请检查副手结果后重试");
+      }
+      if (run.sidekick && !run.sidekickRead) {
+        throw new Error("主手尚未调用read_sidekick取得副手报告，本轮未完成");
       }
       this.current(task, run);
       task.status = "completed";

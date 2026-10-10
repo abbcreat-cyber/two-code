@@ -168,6 +168,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           onSubmit={send}
           leadingActions={
             <TwoCodeModelControls
+              key={`${props.workspaceIdentity || props.workspacePath}:${id ?? "draft"}`}
               value={selection}
               catalog={state.catalog}
               locked={busy || sending || state.loading || state.configuring || !!props.readOnly}
@@ -204,7 +205,9 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
               ? "已停止"
               : task.status === "error"
                 ? "需要处理"
-                : "已结束"}
+                : task.status === "idle"
+                  ? "未开始"
+                  : "已结束"}
         </div>
       )}
     </div>
