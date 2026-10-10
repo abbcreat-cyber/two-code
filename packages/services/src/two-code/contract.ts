@@ -34,7 +34,14 @@ export interface HarnessInfo {
   name: string;
   available: boolean;
   detail: string;
-  models: Array<{ id: string; provider?: string; name: string }>;
+  defaultModel?: string;
+  models: Array<{
+    id: string;
+    provider?: string;
+    name: string;
+    aliases?: string[];
+    realModel?: string;
+  }>;
 }
 export interface TaskEvent {
   seq: number;

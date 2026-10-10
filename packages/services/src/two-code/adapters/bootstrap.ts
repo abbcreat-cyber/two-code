@@ -52,6 +52,7 @@ export function createTwoCodeService(
           name: "Claude Code",
           available: !!claude,
           detail: claude ? "已检测到本机 CLI，沿用其认证配置" : "未找到 Claude Code CLI",
+          defaultModel: claudeModels[0]?.id,
           models: claudeModels,
         },
         {

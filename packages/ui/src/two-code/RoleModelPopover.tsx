@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   chooseModel,
   modelChoices,
-  sameModel,
+  selectedModelName,
   thinkingLabels,
   thinkingOptions,
 } from "./modelChoices.js";
@@ -38,7 +38,6 @@ export function RoleModelPopover({
     `${m.name} ${m.selection.model} ${m.connection}`.toLowerCase().includes(query.toLowerCase()),
   );
   const compatible = candidates.filter((m) => m.selection.harness === selection.harness);
-  const other = candidates.filter((m) => m.selection.harness !== selection.harness);
   const save = async (next: EngineSelection, close: boolean) => {
     setSaving(true);
     setError("");
@@ -68,12 +67,13 @@ export function RoleModelPopover({
           size="sm"
           disabled={disabled || saving}
           data-testid={`two-code-${role}-model`}
-          className="min-w-0 gap-1 px-2 text-ui-base"
+          className="group/role-model min-w-0 gap-1 px-2 text-ui-base"
+          data-composer-collapse-priority="3"
           title={`${label} · ${harness?.name ?? selection.harness} · ${selection.provider || "本机连接"} · ${selection.model || "默认模型"} · 思考${thinkingLabels[selection.thinking ?? ""] ?? selection.thinking}`}
         >
           <span className="shrink-0 text-foreground-subtle">{label}</span>
-          <span className="max-w-40 truncate">
-            {selection.modelLabel || selection.model || "选择模型"}
+          <span className="max-w-40 truncate group-data-[composer-compact=true]/role-model:max-w-24 group-data-[composer-model-icon=true]/toolbar:hidden">
+            {selectedModelName(catalog, selection)}
           </span>
           <ChevronDown className="size-3.5 shrink-0" />
         </Button>
@@ -127,7 +127,7 @@ export function RoleModelPopover({
             <Search className="size-3.5 text-foreground-subtle" />
             <input
               aria-label={`${label}搜索模型`}
-              placeholder="搜索模型或提供方…"
+              placeholder="搜索模型"
               className="h-8 min-w-0 flex-1 bg-transparent text-ui-base outline-none"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -144,59 +144,38 @@ export function RoleModelPopover({
               key={`${m.selection.provider}/${m.selection.model}`}
               type="button"
               role="option"
-              aria-selected={sameModel(m.selection, selection)}
+              aria-selected={m.selected}
+              title={`${m.connection} · ${m.selection.model ?? "默认"}`}
               disabled={disabled || saving || !m.available}
               className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-menu-hover focus-visible:bg-menu-hover focus-visible:outline-none disabled:opacity-50"
               onClick={() => void save(chooseModel(selection, m.selection), true)}
             >
-              <span className="min-w-0 flex-1">
-                <span className="block break-words text-ui-base">{m.name}</span>
-                <span
-                  className="block truncate text-ui-xs text-foreground-subtle"
-                  title={`${m.connection} · ${m.selection.model ?? "默认"}`}
-                >
-                  {m.connection} · {m.selection.model ?? "默认"}
-                </span>
-              </span>
-              {sameModel(m.selection, selection) && <Check className="size-4 shrink-0" />}
+              <span className="min-w-0 flex-1 break-words text-ui-base">{m.name}</span>
+              {m.selected && <Check className="size-4 shrink-0" />}
             </button>
           ))}
           {!compatible.length && (
             <p className="p-3 text-ui-caption text-foreground-subtle">当前脚手架没有匹配模型</p>
           )}
-          {!!other.length && (
-            <details className="px-3 py-2 text-ui-caption text-foreground-subtle">
-              <summary className="cursor-pointer">其他脚手架模型（{other.length}）</summary>
-              {other.map((m) => (
-                <div
-                  key={`${m.selection.harness}/${m.selection.provider}/${m.selection.model}`}
-                  className="py-2"
-                  aria-disabled="true"
-                >
-                  <p>{m.name}</p>
-                  <p className="text-ui-xs">需使用 {m.harnessName}</p>
-                </div>
-              ))}
-            </details>
-          )}
         </div>
-        <div className="shrink-0 space-y-2 border-t border-border p-3">
-          <span className="text-ui-caption text-foreground-subtle">思考档位</span>
-          <div className="flex flex-wrap gap-1" role="group" aria-label={`${label}思考档位`}>
+        <label className="flex shrink-0 items-center justify-between gap-3 border-t border-border p-3 text-ui-caption text-foreground-subtle">
+          思考档位
+          <select
+            aria-label={`${label}思考档位`}
+            value={selection.thinking ?? ""}
+            disabled={disabled || saving}
+            className="h-8 min-w-28 rounded-lg border border-input-border bg-input px-2 text-ui-base text-foreground"
+            onChange={(e) =>
+              void save({ ...selection, thinking: e.target.value || undefined }, false)
+            }
+          >
             {thinkingOptions(selection).map((level) => (
-              <Button
-                key={level}
-                variant={(selection.thinking ?? "") === level ? "secondary" : "ghost"}
-                size="xs"
-                aria-pressed={(selection.thinking ?? "") === level}
-                disabled={disabled || saving}
-                onClick={() => void save({ ...selection, thinking: level || undefined }, false)}
-              >
+              <option key={level} value={level}>
                 {thinkingLabels[level]}
-              </Button>
+              </option>
             ))}
-          </div>
-        </div>
+          </select>
+        </label>
         {error && (
           <p role="alert" className="px-3 pb-2 text-ui-caption text-destructive">
             {error}

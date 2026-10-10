@@ -33,6 +33,7 @@ export function modelChoices(catalog: HarnessInfo[], current: EngineSelection) {
     connection: string;
     available: boolean;
     harnessName: string;
+    selected: boolean;
   }> = catalog.flatMap((h) =>
     h.models.map((m) => ({
       selection: {
@@ -45,19 +46,30 @@ export function modelChoices(catalog: HarnessInfo[], current: EngineSelection) {
       connection: m.provider || `${h.name} 本机连接`,
       available: h.available,
       harnessName: h.name,
+      selected:
+        h.id === current.harness &&
+        (m.provider ?? "") === (current.provider ?? "") &&
+        (m.id === current.model ||
+          m.aliases?.includes(current.model ?? "") === true ||
+          (!current.model && m.id === h.defaultModel)),
     })),
   );
-  const selected = choices.find((c) => sameModel(c.selection, current));
-  if (selected) selected.name = current.modelLabel || selected.name;
-  else
+  const selected = choices.find((c) => c.selected);
+  if (!selected)
     choices.unshift({
       selection: current,
-      name: current.modelLabel || current.model || "沿用本机模型",
+      name: /^(sonnet|opus|haiku|claude-)/.test(current.model ?? "")
+        ? "模型待确认"
+        : current.modelLabel || current.model || "选择模型",
       connection: current.provider || "本机连接",
       available: true,
       harnessName: catalog.find((h) => h.id === current.harness)?.name || current.harness,
+      selected: true,
     });
   return choices;
+}
+export function selectedModelName(catalog: HarnessInfo[], selection: EngineSelection): string {
+  return modelChoices(catalog, selection).find((m) => m.selected)!.name;
 }
 export function chooseModel(current: EngineSelection, next: EngineSelection): EngineSelection {
   const levels = thinkingOptions(next);

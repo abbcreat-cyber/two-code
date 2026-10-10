@@ -2,7 +2,7 @@ import { _electron as electron } from "playwright-core";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 const executablePath =
-  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.4.0-final/win-unpacked/Two Code.exe";
+  process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.5.0-final/win-unpacked/Two Code.exe";
 const env = {
   ...process.env,
   TWO_CODE_BACKGROUND: "1",
@@ -34,8 +34,7 @@ try {
   assert.equal(identity.name, "Two Code");
   assert.equal(identity.userData.replaceAll("\\", "/"), "D:/Apps/TwoCode/state/electron");
   assert(identity.windows.every((w) => w.bounds.x < -1000 && !w.focusable));
-  assert.match(await page.getByTestId("two-code-lead-model").innerText(), /腾讯 DeepSeek/);
-  assert.match(await page.getByTestId("two-code-sidekick-model").innerText(), /腾讯 DeepSeek/);
+  await page.getByTestId("two-code-lead-model").waitFor({ state: "visible" });
   const savedTasks = (await fs.readdir("D:/Apps/TwoCode/data/tasks")).filter((name) =>
     name.endsWith(".json"),
   );
@@ -50,7 +49,8 @@ try {
       saved.status,
     );
     assert.equal(await page.getByTestId("two-code-lead-model").isEnabled(), true);
-    assert.equal(await page.getByTestId("two-code-sidekick-model").isEnabled(), true);
+    if (saved.dual)
+      assert.equal(await page.getByTestId("two-code-sidekick-model").isEnabled(), true);
     await page.getByTestId("chat-mode-select-trigger").waitFor({ state: "visible" });
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].showInactive();

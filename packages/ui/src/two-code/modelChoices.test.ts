@@ -31,10 +31,40 @@ test("same model IDs on different connections retain identity and unsupported ch
   ];
   const choices = modelChoices(catalog, current);
   assert.equal(choices.length, 3);
-  assert.equal(choices[0]!.name, "当前名称");
+  assert.equal(choices[0]!.name, "A");
   assert.equal(choices[1]!.name, "B");
   assert(!sameModel(current, choices[1]!.selection));
   assert(!sameModel(current, choices[2]!.selection));
   assert.equal(chooseModel(current, choices[1]!.selection).provider, "b");
   assert.equal(chooseModel(current, choices[1]!.selection).thinking, "xhigh");
+});
+
+test("legacy aliases select one canonical model and cannot override its true display name", () => {
+  const catalog: HarnessInfo[] = [
+    {
+      id: "claude-code",
+      name: "Claude Code",
+      available: true,
+      detail: "",
+      defaultModel: "route-id",
+      models: [
+        {
+          id: "route-id",
+          name: "DeepSeek V4.1 Flash",
+          realModel: "deepseek-v4.1-flash",
+          aliases: ["sonnet", "opus", "haiku"],
+        },
+      ],
+    },
+  ];
+  for (const model of ["route-id", "sonnet", "opus", "haiku", undefined]) {
+    const choices = modelChoices(catalog, {
+      harness: "claude-code",
+      model,
+      modelLabel: "错误的旧映射名",
+    });
+    assert.equal(choices.length, 1);
+    assert.equal(choices[0]!.name, "DeepSeek V4.1 Flash");
+    assert.equal(choices[0]!.selected, true);
+  }
 });

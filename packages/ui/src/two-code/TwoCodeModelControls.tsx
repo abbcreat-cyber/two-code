@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GitBranch, ChevronDown } from "lucide-react";
+import { GitBranch, ChevronDown, UserRound, UsersRound, Bookmark, Check } from "lucide-react";
 import type { ActorRole, HarnessInfo, TwoCodePreferences, TwoCodeMode } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.js";
@@ -10,7 +10,7 @@ import { useTabStore } from "@/store/TabStoreProvider.js";
 import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { RoleCard } from "./RoleCard.js";
 import { RoleModelPopover } from "./RoleModelPopover.js";
-import { thinkingLabels } from "./modelChoices.js";
+import { thinkingLabels, selectedModelName } from "./modelChoices.js";
 
 export function TwoCodeModelControls({
   value,
@@ -29,13 +29,13 @@ export function TwoCodeModelControls({
   onSaveDefaults(value: TwoCodePreferences): Promise<void>;
   hasSessions?: Partial<Record<ActorRole, boolean>>;
 }) {
-  const [manage, setManage] = useState<ActorRole | "pair" | null>(null),
+  const [manage, setManage] = useState<ActorRole | null>(null),
     [draft, setDraft] = useState(value),
     [saving, setSaving] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
   const openSettings = useTabStore((s) => s.openSettingsTab);
-  const beginManage = (target: ActorRole | "pair") => {
+  const beginManage = (target: ActorRole) => {
     setDraft(structuredClone(value));
     setError("");
     setManage(target);
@@ -53,7 +53,7 @@ export function TwoCodeModelControls({
       setSaving(false);
     }
   };
-  const roles: ActorRole[] = manage === "pair" ? ["lead", "sidekick"] : manage ? [manage] : [];
+  const roles: ActorRole[] = manage ? [manage] : [];
   return (
     <>
       <ConfigSelect
@@ -86,60 +86,99 @@ export function TwoCodeModelControls({
           <Button
             size="sm"
             variant="ghost"
-            className="gap-1 px-2 text-ui-base"
+            className="group/role-mode gap-1 px-2 text-ui-base"
             data-testid="two-code-mode"
+            aria-label={value.dual ? "双角色设置" : "单角色设置"}
+            data-composer-collapse-priority="1"
           >
             <GitBranch size={14} />
-            {value.dual ? "双角色" : "单角色"}
-            <ChevronDown size={12} />
+            <span className="group-data-[composer-compact=true]/role-mode:hidden">
+              {value.dual ? "双角色" : "单角色"}
+            </span>
+            <ChevronDown
+              size={12}
+              className="group-data-[composer-compact=true]/role-mode:hidden"
+            />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" side="top" className="w-64 p-1">
-          <Button
-            className="w-full justify-start"
-            variant="ghost"
-            disabled={locked || saving}
-            onClick={() => {
-              void save({ ...value, dual: !value.dual }).catch(() => {});
-            }}
-          >
-            {value.dual ? "切换单角色" : "启用双角色"}
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="ghost"
-            onClick={() => beginManage("pair")}
-          >
-            组合设置
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="ghost"
-            disabled={locked || saving}
-            onClick={async () => {
-              setSaving(true);
-              setError("");
-              try {
-                await onSaveDefaults(value);
-                setNotice("已设为新任务默认组合");
-              } catch (cause) {
-                setError(String(cause));
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            设为新任务默认组合
-          </Button>
-          {onNative && (
+        <PopoverContent
+          align="start"
+          side="top"
+          className="w-72 gap-0 overflow-hidden p-0"
+          data-testid="two-code-collaboration-panel"
+        >
+          <div className="space-y-2 p-3">
+            <p className="text-ui-xs font-medium text-foreground-subtle">当前任务</p>
+            <div
+              className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"
+              role="group"
+              aria-label="角色模式"
+            >
+              <Button
+                variant={value.dual ? "ghost" : "secondary"}
+                size="sm"
+                className="gap-2"
+                aria-pressed={!value.dual}
+                disabled={locked || saving}
+                onClick={() => {
+                  void save({ ...value, dual: false }).catch(() => {});
+                }}
+              >
+                <UserRound className="size-4" />
+                {!value.dual && <Check className="size-3" aria-hidden="true" />}
+                单角色
+              </Button>
+              <Button
+                variant={value.dual ? "secondary" : "ghost"}
+                size="sm"
+                className="gap-2"
+                aria-pressed={value.dual}
+                disabled={locked || saving}
+                onClick={() => {
+                  void save({ ...value, dual: true }).catch(() => {});
+                }}
+              >
+                <UsersRound className="size-4" />
+                {value.dual && <Check className="size-3" aria-hidden="true" />}
+                双角色
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-1 border-t border-border p-3">
+            <p className="mb-2 text-ui-xs font-medium text-foreground-subtle">新任务默认设置</p>
             <Button
-              className="w-full justify-start"
+              className="w-full justify-start gap-2"
               variant="ghost"
               disabled={locked || saving}
-              onClick={onNative}
+              onClick={async () => {
+                setSaving(true);
+                setError("");
+                try {
+                  await onSaveDefaults(value);
+                  setNotice("已保存，以后新建任务使用此配置");
+                } catch (cause) {
+                  setError(String(cause));
+                } finally {
+                  setSaving(false);
+                }
+              }}
             >
-              ZCode 原生模式
+              <Bookmark className="size-4" />
+              将当前配置设为默认
             </Button>
+            <p className="px-2 text-ui-xs text-foreground-subtlest">只影响之后新建的任务</p>
+          </div>
+          {onNative && (
+            <div className="border-t border-border p-1">
+              <Button
+                className="w-full justify-start"
+                variant="ghost"
+                disabled={locked || saving}
+                onClick={onNative}
+              >
+                ZCode 原生模式
+              </Button>
+            </div>
           )}
           {notice && (
             <p role="status" className="px-3 py-2 text-ui-caption text-foreground-subtle">
@@ -171,16 +210,12 @@ export function TwoCodeModelControls({
           if (!open && !saving) setManage(null);
         }}
       >
-        <DialogContent className={manage === "pair" ? "max-w-2xl" : "max-w-lg"}>
-          <DialogTitle>
-            {manage === "pair" ? "组合设置" : `${manage === "lead" ? "主手" : "副手"} · 模型与连接`}
-          </DialogTitle>
+        <DialogContent className="max-w-lg">
+          <DialogTitle>{`${manage === "lead" ? "主手" : "副手"} · 模型与连接`}</DialogTitle>
           <DialogDescription>
             保存后从下一轮生效；更换模型保留当前脚手架的上下文。
           </DialogDescription>
-          <div
-            className={`grid max-h-[65vh] gap-3 overflow-y-auto ${manage === "pair" ? "sm:grid-cols-2" : ""}`}
-          >
+          <div className="grid max-h-[65vh] gap-3 overflow-y-auto">
             {roles.map((role) => (
               <div key={role} className="min-w-0 space-y-3">
                 <div className="space-y-1 rounded-xl border border-border p-3">
@@ -189,7 +224,7 @@ export function TwoCodeModelControls({
                     {catalog.find((h) => h.id === draft[role].harness)?.name}
                   </p>
                   <p className="break-words text-ui-base">
-                    {draft[role].modelLabel || draft[role].model || "沿用本机模型"}
+                    {selectedModelName(catalog, draft[role])}
                   </p>
                   <p className="text-ui-caption text-foreground-subtle">
                     {draft[role].provider || "本机连接"} · 思考

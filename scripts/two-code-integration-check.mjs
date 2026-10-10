@@ -53,11 +53,24 @@ const app = await electron.launch({
 const errors = [];
 try {
   const page = await app.firstWindow();
-  const openPair = async () => {
-    await page.getByTestId("two-code-mode").click();
-    await page.getByRole("button", { name: "组合设置", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "组合设置" });
-    for (const summary of await dialog.locator("summary").all()) await summary.click();
+  const configureRole = async (role, changes) => {
+    const label = role === "lead" ? "主手" : "副手";
+    await page.getByTestId(`two-code-${role}-model`).click();
+    await page
+      .getByTestId(`two-code-${role}-panel`)
+      .getByRole("button", { name: "管理模型与连接…" })
+      .click();
+    const dialog = page.getByRole("dialog", { name: `${label} · 模型与连接` });
+    await dialog.locator("summary").click();
+    if (changes.harness)
+      await dialog.getByLabel(`${label}脚手架`, { exact: true }).selectOption(changes.harness);
+    if (changes.provider)
+      await dialog.getByLabel(`${label}提供方`, { exact: true }).fill(changes.provider);
+    if (changes.model) await dialog.getByLabel(`${label}模型`, { exact: true }).fill(changes.model);
+    if (changes.thinking)
+      await dialog.getByLabel(`${label}思考`, { exact: true }).selectOption(changes.thinking);
+    await dialog.getByRole("button", { name: "保存", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
   };
   page.on("pageerror", (e) => errors.push(e.message));
   await page.getByTestId("two-code-native-session").waitFor({ state: "visible", timeout: 30000 });
@@ -70,13 +83,7 @@ try {
   await page.waitForTimeout(2000);
   assert.equal(await page.getByTestId("two-code-sidebar-open").count(), 0);
   assert.equal(await page.getByTestId("two-code-workbench").count(), 0);
-  console.log(
-    JSON.stringify({
-      root,
-      initial: (await page.locator("body").innerText()).slice(0, 2300),
-      errors,
-    }),
-  );
+  console.log(JSON.stringify({ root, errors }));
   await page.screenshot({ animations: "disabled", path: path.join(root, "initial.png") });
   // 实际原生testid在不同版本可能使用不同分隔符，按任务地址严格定位同一个原生行。
   const nativeRow = page.locator(`[data-testid*="task-item"][data-testid$="${legacyId}"]`);
@@ -90,11 +97,9 @@ try {
     await page.getByRole("option", { name: new RegExp(label) }).waitFor();
   await page.screenshot({ animations: "disabled", path: path.join(root, "mode-menu.png") });
   await page.getByRole("option", { name: /自动编辑/ }).click();
-  await openPair();
-  await page.getByLabel("主手模型", { exact: true }).fill("sonnet");
-  await page.getByLabel("副手思考", { exact: true }).selectOption("medium");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await page.getByRole("dialog", { name: "组合设置" }).waitFor({ state: "hidden" });
+  await configureRole("lead", { model: "sonnet" });
+  await configureRole("sidekick", { thinking: "medium" });
+  assert.match(await page.getByTestId("two-code-lead-model").innerText(), /DeepSeek V4.1 Flash/);
   const configuredLegacy = JSON.parse(
     await fs.readFile(path.join(root, `data/tasks/${legacyId}.json`), "utf8"),
   );
@@ -132,8 +137,22 @@ try {
     const leadPanel = page.getByTestId("two-code-lead-panel");
     await leadPanel.waitFor();
     assert.equal(await leadPanel.getByLabel("主手脚手架").inputValue(), "claude-code");
-    await leadPanel.getByLabel("主手搜索模型").fill("sonnet");
-    assert((await leadPanel.getByRole("option").count()) > 0);
+    await leadPanel.getByLabel("主手搜索模型").fill("DeepSeek");
+    assert.equal(
+      await leadPanel.getByRole("listbox", { name: "主手模型列表" }).getByRole("option").count(),
+      1,
+    );
+    assert.equal(
+      (
+        await leadPanel
+          .getByRole("listbox", { name: "主手模型列表" })
+          .getByRole("option")
+          .innerText()
+      ).trim(),
+      "DeepSeek V4.1 Flash",
+    );
+    assert.equal(await leadPanel.getByText(/其他脚手架/).count(), 0);
+    assert.equal(await leadPanel.getByRole("combobox", { name: "主手思考档位" }).count(), 1);
     await page.screenshot({ animations: "disabled", path: path.join(root, "lead-panel.png") });
     await leadPanel.getByRole("button", { name: "管理模型与连接…" }).click();
     const roleDialog = page.getByRole("dialog", { name: "主手 · 模型与连接" });
@@ -142,7 +161,7 @@ try {
     await roleDialog.getByRole("button", { name: "取消", exact: true }).click();
     await page.getByTestId("two-code-sidekick-model").click();
     const childPanel = page.getByTestId("two-code-sidekick-panel");
-    await childPanel.getByRole("button", { name: "中", exact: true }).click();
+    await childPanel.getByLabel("副手思考档位", { exact: true }).selectOption("medium");
     await page.waitForTimeout(200);
     const childBounds = await childPanel.boundingBox();
     assert(
@@ -152,13 +171,26 @@ try {
     );
     await page.screenshot({ animations: "disabled", path: path.join(root, "sidekick-panel.png") });
     await page.keyboard.press("Escape");
-    await openPair();
-    assert.equal(await page.getByLabel("主手脚手架", { exact: true }).inputValue(), "claude-code");
-    await page.getByRole("button", { name: "保存", exact: true }).click();
     await page.getByTestId("two-code-mode").click();
-    await page.getByRole("button", { name: "设为新任务默认组合", exact: true }).click();
-    await page.getByText("已设为新任务默认组合", { exact: true }).waitFor();
+    const collaboration = page.getByTestId("two-code-collaboration-panel");
+    assert.equal(
+      await collaboration.getByRole("button", { name: /组合设置|主副手配置/ }).count(),
+      0,
+    );
+    await collaboration.getByRole("button", { name: "单角色", exact: true }).click();
+    await page.getByTestId("two-code-sidekick-model").waitFor({ state: "hidden" });
+    await collaboration.getByRole("button", { name: "双角色", exact: true }).click();
+    await page.getByTestId("two-code-sidekick-model").waitFor({ state: "visible" });
+    await page.screenshot({
+      animations: "disabled",
+      path: path.join(root, "collaboration-menu.png"),
+    });
+    await collaboration.getByRole("button", { name: "将当前配置设为默认", exact: true }).click();
+    await page.getByText("已保存，以后新建任务使用此配置", { exact: true }).waitFor();
     await page.keyboard.press("Escape");
+    const roleBounds = await page.getByTestId("two-code-sidekick-model").boundingBox();
+    const sendBounds = await page.getByTestId("two-code-send").boundingBox();
+    assert(roleBounds.x + roleBounds.width <= sendBounds.x, "model controls overlap send button");
     const prompt =
       "原生界面实测。主手先用Write工具在当前目录创建integration-proof.txt，内容恰为INTEGRATED_OK。然后必须派给持久副手心算17乘19，副手只报告答案。主手核对后回复Markdown粗体的323。暗号青松仅记在会话上下文，不写记忆文件。本任务只允许Write/Read这个测试文件以及sidekick/read_sidekick。禁止Bash、Shell、其他文件操作、GUI、联网和加载技能。";
     await page.getByTestId("two-code-composer").fill(prompt);
@@ -262,11 +294,8 @@ try {
     await liveRow.click();
     const beforeReloadUsage = JSON.parse(await fs.readFile(taskPath, "utf8")).usage;
     assert.deepEqual(beforeReloadUsage, first.usage);
-    await openPair();
-    await page.getByLabel("主手模型", { exact: true }).fill("sonnet");
-    await page.getByLabel("副手思考", { exact: true }).selectOption("medium");
-    await page.getByRole("button", { name: "保存", exact: true }).click();
-    await page.getByRole("dialog", { name: "组合设置" }).waitFor({ state: "hidden" });
+    await configureRole("lead", { model: "sonnet" });
+    await configureRole("sidekick", { thinking: "medium" });
     await page
       .getByTestId("two-code-composer")
       .fill("请再次交给同一副手，让它复述上次计算结果。主手再告诉我暗号。不用任何其他工具。");
@@ -289,15 +318,17 @@ try {
       .getByRole("button", { name: /^新建任务/ })
       .first()
       .click();
-    await openPair();
-    await page.getByLabel("主手脚手架", { exact: true }).selectOption("pi");
-    await page.getByLabel("主手提供方", { exact: true }).fill("ds-tencent");
-    await page.getByLabel("主手模型", { exact: true }).fill(preferences.sidekick.model);
-    await page.getByLabel("主手思考", { exact: true }).selectOption("high");
-    await page.getByLabel("副手脚手架", { exact: true }).selectOption("claude-code");
-    await page.getByLabel("副手模型", { exact: true }).fill(preferences.lead.model);
-    await page.getByLabel("副手思考", { exact: true }).selectOption("high");
-    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await configureRole("lead", {
+      harness: "pi",
+      provider: "ds-tencent",
+      model: preferences.sidekick.model,
+      thinking: "high",
+    });
+    await configureRole("sidekick", {
+      harness: "claude-code",
+      model: preferences.lead.model,
+      thinking: "high",
+    });
     await page
       .getByTestId("two-code-composer")
       .fill(
@@ -334,15 +365,7 @@ try {
     await page
       .locator('[data-testid="two-code-state"][data-status="cancelled"]')
       .waitFor({ timeout: 30000 });
-    console.log(
-      JSON.stringify({
-        liveIntegrated: true,
-        nativePermission: true,
-        originalSidebar: true,
-        sameSessions: true,
-        root,
-      }),
-    );
+    console.log(JSON.stringify({ liveIntegrated: true, sameSessions: true, root }));
   }
   await fs.writeFile(
     path.join(root, "observation.json"),
