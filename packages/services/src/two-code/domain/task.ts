@@ -70,6 +70,14 @@ export function appendEvent(
   task.updatedAt = at;
   task.events.push({ ...event, seq: (task.events.at(-1)?.seq ?? 0) + 1, at: task.updatedAt });
 }
+export function sidekickPrompt(task: TwoCodeTask, assignment: string): string {
+  // 原始约束不能只依靠主手转述；只附当前轮原文，避免把整个历史重复注入。
+  const original = task.events.findLast(
+    (event) => event.role === "user" && event.kind === "message",
+  )?.text;
+  if (!original) return assignment;
+  return `本次派工：\n${assignment}\n\n本轮用户原始请求（用于核对范围和限制）：\n${original}\n\n你只执行本次派工，遵守原始请求的限制；原文中主手派工、汇总和向用户回复的动作仍由主手完成。`;
+}
 export const leadInstruction = `你是主手。所有面向用户的输出一律中文。你负责澄清、计划、判断、审查和最终回复。
 本任务提供一个持久副手，调用sidekick派出明确任务；后续交接复用同一副手。副手使用独立脚手架和模型，共享工作目录。
 实现和验证优先委派。自己先确定接口、范围及可验证的成功条件。不要把未返回的派工说成完成。

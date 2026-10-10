@@ -65,6 +65,29 @@ test("lead delegates to one persistent sidekick and reviews its result", async (
   assert.match(result.lead.lastReport ?? "", /审查/);
   assert(result.events.every((event, i) => event.seq === i + 1));
 });
+
+test("sidekick receives current user constraints even when lead omits them in its assignment", async () => {
+  const delegated: string[] = [];
+  const { service } = fixture(async (input) => {
+    if (input.handoff) return { text: await input.handoff("只计算9+8") };
+    delegated.push(input.prompt);
+    return { text: "17" };
+  });
+  const task = await create(service);
+  await service.submit({
+    taskId: task.id,
+    requestId: "first",
+    text: "只允许心算，不得使用Shell；当前暗号A",
+  });
+  await settled(service, task.id);
+  await service.submit({ taskId: task.id, requestId: "next", text: "第二轮不要联网；当前暗号B" });
+  await settled(service, task.id);
+  assert.match(delegated[0]!, /只计算9\+8/);
+  assert.match(delegated[0]!, /不得使用Shell/);
+  assert.match(delegated[1]!, /第二轮不要联网/);
+  assert(!delegated[1]!.includes("当前暗号A"));
+  await service.dispose();
+});
 test("duplicate request IDs never run twice", async () => {
   let calls = 0;
   const { service } = fixture(async () => {
@@ -94,6 +117,8 @@ test("cancellation rejects late success and preserves the same task", async () =
   const result = await stopping;
   assert.equal(result.status, "cancelled");
   assert.notEqual(result.lead.lastReport, "too late");
+  assert.equal(result.error, undefined, "用户主动停止不是运行错误");
+  assert.equal(result.events.filter((event) => event.kind === "error").length, 0);
 });
 test("failed admission persistence starts no model and permits explicit retry", async () => {
   let calls = 0;

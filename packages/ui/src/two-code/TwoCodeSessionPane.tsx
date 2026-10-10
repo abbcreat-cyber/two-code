@@ -30,10 +30,11 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
   });
   const task = state.task,
     busy = task?.status === "running";
-  const [sending, setSending] = useState(false),
-    [text, setText] = useState("");
-  const input = useRef<LexicalChatInputHandle | null>(null);
+  const visibleError = state.error || (task?.status !== "cancelled" ? task?.error : undefined);
   const draftKey = `two-code:composer:${props.workspaceIdentity || props.workspacePath}:${props.sessionId ?? "draft"}`;
+  const [sending, setSending] = useState(false),
+    [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
+  const input = useRef<LexicalChatInputHandle | null>(null);
   const draftKeyRef = useRef(draftKey);
   draftKeyRef.current = draftKey;
   useEffect(() => {
@@ -138,9 +139,9 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           />
         </div>
       )}
-      {(state.error || task?.error) && (
+      {visibleError && (
         <p role="alert" className="mb-2 max-h-28 overflow-auto text-ui-caption text-destructive">
-          {state.error || task?.error}
+          {visibleError}
         </p>
       )}
       {!id && props.draftComposerHeader}
@@ -151,6 +152,8 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           taskId={null}
           inputApiRef={input}
           initialValue={text}
+          // 草稿由本组件恢复；禁止编辑器用首次空值在下一帧覆盖已恢复内容。
+          syncInitialValueOnMount={false}
           placeholder={id ? "继续这个任务…" : "描述你的任务…"}
           inputTestId="two-code-composer"
           submitTestId="two-code-send"

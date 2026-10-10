@@ -11,18 +11,31 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
   let message: Extract<ConversationRow, { kind: "assistantText" }> | undefined;
   let thought: Extract<ConversationRow, { kind: "reasoning" }> | undefined;
   let thoughtRole: string | undefined;
+  let lastEventAt: number | undefined,
+    interruptedTurn = false;
   for (const event of task.events) {
     const at = Date.parse(event.at),
       rowId = event.seq * 10;
+    const previousAt = lastEventAt ?? at;
+    lastEventAt = at;
+    const stopping =
+      event.role === "system" && event.kind === "status" && event.text === "正在停止主手与副手";
+    if (stopping) interruptedTurn = true;
     const base = () => ({ rowId, turnId, createdAt: at, createdAtSeq: event.seq });
     if (thought && (event.kind !== "reasoning" || event.role !== thoughtRole || !event.text)) {
-      thought.state =
-        (event.kind === "error" || event.kind === "status") &&
-        (task.status === "cancelled" || task.status === "error")
-          ? "interrupted"
-          : "complete";
+      thought.state = event.kind === "error" || stopping ? "interrupted" : "complete";
       thought.durationMs = Math.max(0, at - thought.createdAt);
       thought = undefined;
+    }
+    // 历史终态属于当轮事件；后续成功的任务快照不能改写之前的停止和副手状态。
+    if (header && (stopping || event.kind === "error")) {
+      header.state = interruptedTurn ? "completedInterrupted" : "failed";
+      header.endedAt ??= at;
+      if (handoff?.status === "running") {
+        handoff.status = interruptedTurn ? "cancelled" : "error";
+        handoff.endedAt = at;
+        if (!interruptedTurn) handoff.error = { code: "two-code-run-failed", message: event.text };
+      }
     }
     // 直接投影原生reasoning行，让原有“已工作”和思考显示设置拥有折叠交互。
     if (event.kind === "reasoning") {
@@ -44,8 +57,14 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
     if (event.role === "user" && event.kind === "message") {
       if (header?.state === "running") {
         header.state = "completedSuccess";
-        header.endedAt = at;
+        // 兼容没有结束标记的旧数据，也只能取上一条活动时间，不能计入聊天间隔。
+        header.endedAt = previousAt;
       }
+      if (handoff?.status === "running") {
+        handoff.status = "cancelled";
+        handoff.endedAt = header?.endedAt ?? previousAt;
+      }
+      interruptedTurn = false;
       turnId = `two-code-turn:${event.seq}`;
       header = {
         ...base(),
@@ -104,8 +123,14 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
           lane: "assistantWork",
           marker: { type: "harnessActivity", label: `调用工具 · ${event.text}` },
         });
-    } else if (event.kind === "error" && header) {
-      header.state = task.status === "cancelled" ? "completedInterrupted" : "failed";
+    } else if (
+      event.role === "lead" &&
+      event.kind === "status" &&
+      event.text.startsWith("执行已结束") &&
+      header
+    ) {
+      header.state = "completedSuccess";
+      header.endedAt = at;
     }
   }
   if (header) {
@@ -119,7 +144,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
             : "completedSuccess";
     // 配置保存也会更新updatedAt；已工作时长取最后执行事件，不能随切模型增长。
     if (task.status !== "running")
-      header.endedAt = Date.parse(task.events.at(-1)?.at ?? task.updatedAt);
+      header.endedAt ??= Date.parse(task.events.at(-1)?.at ?? task.updatedAt);
   }
   if (message && task.status === "running" && task.lead.status === "running")
     message.state = "streaming";

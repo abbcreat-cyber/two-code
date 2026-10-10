@@ -70,6 +70,70 @@ test("saving model preferences cannot extend a completed turn duration", () => {
   assert.equal(header.endedAt! - header.startedAt, 3000);
 });
 
+test("a resumed successful task preserves the cancelled turn and stops its historical sidekick", () => {
+  const task = structuredClone(base);
+  task.status = "completed";
+  task.sidekick.status = "completed";
+  task.events = [
+    { seq: 1, at: "2026-10-10T10:00:00Z", role: "user", kind: "message", text: "运行" },
+    { seq: 2, at: "2026-10-10T10:00:01Z", role: "lead", kind: "handoff", text: "计算" },
+    { seq: 3, at: "2026-10-10T10:00:02Z", role: "sidekick", kind: "reasoning", text: "检查" },
+    {
+      seq: 4,
+      at: "2026-10-10T10:00:03Z",
+      role: "system",
+      kind: "status",
+      text: "正在停止主手与副手",
+    },
+    { seq: 5, at: "2026-10-10T10:00:03Z", role: "system", kind: "error", text: "Pi 任务已停止" },
+    { seq: 6, at: "2026-10-10T11:00:00Z", role: "user", kind: "message", text: "继续" },
+    { seq: 7, at: "2026-10-10T11:00:04Z", role: "lead", kind: "message", text: "完成" },
+    {
+      seq: 8,
+      at: "2026-10-10T11:00:05Z",
+      role: "lead",
+      kind: "status",
+      text: "执行已结束，待核对结果",
+    },
+  ];
+  const rows = projectTwoCodeRows(task);
+  rows.forEach((r) => conversationRowSchema.parse(r));
+  const turns = rows.filter((r) => r.kind === "turnHeader");
+  assert.deepEqual(
+    turns.map((r) => r.state),
+    ["completedInterrupted", "completedSuccess"],
+  );
+  assert.equal(turns[0]!.endedAt! - turns[0]!.startedAt, 3000);
+  assert.equal(rows.find((r) => r.kind === "toolCall")?.status, "cancelled");
+  assert.equal(rows.find((r) => r.kind === "reasoning")?.state, "interrupted");
+});
+
+test("historical elapsed work excludes the idle gap before the next user turn", () => {
+  for (const withTerminal of [false, true]) {
+    const task = structuredClone(base);
+    task.status = "completed";
+    task.events = [
+      { seq: 1, at: "2026-10-10T10:00:00Z", role: "user", kind: "message", text: "第一轮" },
+      { seq: 2, at: "2026-10-10T10:00:03Z", role: "lead", kind: "message", text: "完成" },
+      ...(withTerminal
+        ? [
+            {
+              seq: 3,
+              at: "2026-10-10T10:00:03Z",
+              role: "lead" as const,
+              kind: "status" as const,
+              text: "执行已结束，待核对结果",
+            },
+          ]
+        : []),
+      { seq: 4, at: "2026-10-10T11:00:00Z", role: "user", kind: "message", text: "第二轮" },
+      { seq: 5, at: "2026-10-10T11:00:04Z", role: "lead", kind: "message", text: "完成" },
+    ];
+    const turn = projectTwoCodeRows(task).find((r) => r.kind === "turnHeader")!;
+    assert.equal(turn.endedAt! - turn.startedAt, 3000);
+  }
+});
+
 test("reasoning uses native rows, survives snapshot replay and stays out of answer text", () => {
   const task = structuredClone(base);
   const add = (

@@ -19,6 +19,7 @@ import {
   newTask,
   reconfigureTask,
   sidekickInstruction,
+  sidekickPrompt,
   validateSelection,
 } from "../domain/task.js";
 
@@ -78,15 +79,12 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     this.changes.fire(copy(task));
   }
   catalog = () => this.deps.catalog();
-  async preferences(): Promise<TwoCodePreferences> {
-    return (
-      this.deps.preferences?.read() ?? {
-        dual: true,
-        lead: { harness: "claude-code" },
-        sidekick: { harness: "pi" },
-      }
-    );
-  }
+  preferences = async (): Promise<TwoCodePreferences> =>
+    this.deps.preferences?.read() ?? {
+      dual: true,
+      lead: { harness: "claude-code" },
+      sidekick: { harness: "pi" },
+    };
   async configurePreferences(input: TwoCodePreferences): Promise<TwoCodePreferences> {
     input = parsePreferences(input);
     validateSelection(input.lead);
@@ -326,7 +324,9 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       throw new Error("副手仍在执行，请先read_sidekick读取报告；不要重复派工");
     }
     this.emit(task, "lead", "handoff", message);
-    run.sidekick = this.execute(task, run, "sidekick", message).then((report) => report.text);
+    run.sidekick = this.execute(task, run, "sidekick", sidekickPrompt(task, message)).then(
+      (report) => report.text,
+    );
     // 非阻塞派工也必须有人观察失败；read_sidekick仍保留原拒绝语义。
     void run.sidekick.catch(() => undefined);
     return block
@@ -350,8 +350,9 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       task.status = "completed";
     } catch (error) {
       task.status = run.abort.signal.aborted ? "cancelled" : "error";
-      task.error = errorText(error);
-      this.emit(task, "system", "error", task.error);
+      // 主动停止已有取消事件，不能把适配器的abort异常当作运行失败回传到界面。
+      task.error = task.status === "cancelled" ? undefined : errorText(error);
+      if (task.error) this.emit(task, "system", "error", task.error);
       run.abort.abort();
     } finally {
       for (const resolve of run.permissions.values()) resolve(false);
