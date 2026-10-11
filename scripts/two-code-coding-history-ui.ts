@@ -5,7 +5,8 @@ import { _electron as electron } from "playwright-core";
 import { projectTwoCodeRows } from "../packages/ui/src/two-code/conversationProjection.js";
 const history = process.env.TWO_CODE_CODING_HISTORY;
 if (!history) throw Error("提供本轮代码任务目录");
-const root = `D:/Apps/TwoCode/qa/coding-history-ui-${Date.now()}`,
+const root =
+    process.env.TWO_CODE_CODING_UI_ROOT ?? `D:/Apps/TwoCode/qa/coding-history-ui-${Date.now()}`,
   cwd = `${root}/workspace`;
 await fs.mkdir(cwd, { recursive: true });
 process.env.TWO_CODE_HOME = `${root}/data`;
@@ -97,6 +98,21 @@ try {
     const visibleReports = page.locator('[data-tool-name="sidekick"]');
     await visibleReports.last().waitFor();
     assert.equal(await page.getByRole("alert").count(), 0);
+    // 展开工具后等待真实测高，避免把虚拟列表尚未重排的过渡帧当成交付截图。
+    await page.waitForFunction(
+      () => {
+        const rows = [...document.querySelectorAll('[data-v4-turn-unit="true"]')]
+          .map((node) => node.getBoundingClientRect())
+          .filter((rect) => rect.height > 0)
+          .sort((a, b) => a.top - b.top);
+        return (
+          rows.length > 0 &&
+          rows.every((row, index) => index === 0 || row.top >= rows[index - 1].bottom - 2)
+        );
+      },
+      undefined,
+      { timeout: 5000 },
+    );
     await page.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });
     await page.reload();
     await page.locator('[data-testid="two-code-state"][data-status="completed"]').waitFor();

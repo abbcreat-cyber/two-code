@@ -42,6 +42,11 @@ export async function permissionDecision(
       "websearch",
       "webfetch",
       "todowrite",
+      // Step 原生清单只记录计划，不执行或分派工作；不能误当未知工具打断主副手。
+      "task_create",
+      "task_update",
+      "task_get",
+      "task_list",
       "sidekick",
       "read_sidekick",
       "read_handoff_history",

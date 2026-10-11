@@ -4,6 +4,15 @@ import { mkdir, mkdtemp, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { permissionDecision as decide } from "./permission-policy.js";
 
+test("原生执行清单无需授权，未知task工具不按前缀放行", async () => {
+  for (const role of ["lead", "sidekick"] as const)
+    for (const mode of ["plan", "edit", "build", "yolo"] as const)
+      for (const tool of ["task_create", "task_update", "task_get", "task_list"])
+        assert.equal(await decide(mode, tool, "{}", "D:/fixture", role), "allow");
+  assert.equal(await decide("edit", "task_execute", "{}", "D:/fixture", "lead"), "ask");
+  assert.equal(await decide("plan", "task_execute", "{}", "D:/fixture", "lead"), "deny");
+});
+
 test("副手的递归委派、用户问答和全局目标权限在yolo也不可用，历史与文件工具可用", async () => {
   for (const tool of [
     "Agent",
