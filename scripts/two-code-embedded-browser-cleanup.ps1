@@ -1,8 +1,8 @@
 param([Parameter(Mandatory=$true)][string]$Root)
 $ErrorActionPreference='Stop'
 $target=[IO.Path]::GetFullPath($Root).TrimEnd('\')
-if($target -notmatch '^D:\\Apps\\TwoCode\\qa\\(embedded-browser|glm-coordination|role-swap)-\d+$'){throw '不是所属QA目录'}
-$expectedKind=if($target -match '\\role-swap-\d+$'){'two-code-role-swap-qa'}elseif($target -match '\\glm-coordination-\d+$'){'two-code-glm-coordination-qa'}else{'two-code-embedded-browser-qa'}
+if($target -notmatch '^D:\\Apps\\TwoCode\\qa\\(embedded-browser|glm-coordination|role-swap|three-harness)-\d+$'){throw '不是所属QA目录'}
+$expectedKind=if($target -match '\\three-harness-\d+$'){'two-code-three-harness-qa'}elseif($target -match '\\role-swap-\d+$'){'two-code-role-swap-qa'}elseif($target -match '\\glm-coordination-\d+$'){'two-code-glm-coordination-qa'}else{'two-code-embedded-browser-qa'}
 $owner=Get-Content -LiteralPath (Join-Path $target 'owner.json') -Raw|ConvertFrom-Json
 if($owner.kind -ne $expectedKind -or [IO.Path]::GetFullPath($owner.root).TrimEnd('\') -ne $target){throw '所有权不一致'}
 if(-not(Test-Path -LiteralPath (Join-Path $target 'closed.json'))){throw '测试应用未确认关闭'}
