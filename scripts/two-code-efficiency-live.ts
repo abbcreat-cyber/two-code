@@ -47,11 +47,21 @@ try {
     ?.models.find((m) => /deepseek/i.test(`${m.name} ${m.realModel}`));
   assert(model);
   console.log(JSON.stringify({ root, label }));
-  for (const name of ["frozen", "repair", "visual"].filter(
-    (n) =>
-      !process.env.TWO_CODE_BENCH_CASES || process.env.TWO_CODE_BENCH_CASES.split(",").includes(n),
-  )) {
-    const cwd = `${root}/${name}`;
+  let sample = 0;
+  for (const name of ["frozen", "repair", "visual", "failure"]
+    .filter(
+      (n) =>
+        !process.env.TWO_CODE_BENCH_CASES ||
+        process.env.TWO_CODE_BENCH_CASES.split(",").includes(n),
+    )
+    .flatMap((name) =>
+      Array.from(
+        { length: Math.max(1, Math.min(3, Number(process.env.TWO_CODE_BENCH_REPEATS) || 1)) },
+        () => name,
+      ),
+    )) {
+    sample++;
+    const cwd = `${root}/${name}-${sample}`;
     await fs.mkdir(cwd, { recursive: true });
     const task = await service.create({
       workspacePath: cwd,
@@ -81,6 +91,12 @@ try {
         "import assert from 'node:assert/strict';import {sumPaid} from './sum.mjs';assert.equal(sumPaid([]),0);assert.equal(sumPaid([{status:'paid',amount:'0.10'},{status:'paid',amount:'0.20'},{status:'cancelled',amount:'9.00'}]),0.3);assert.equal(sumPaid([{status:'paid',amount:'-2.50'},{status:'paid',amount:5}]),2.5);console.log('3 checks passed');\n",
       );
       prompt = `让副手修复sum.mjs：只统计status为paid的金额，amount兼容数字和字符串，按整数分累加避免浮点误差，空数组返回0，允许负金额。不得改check.mjs。副手完成后用原生PowerShell运行一次 node '${cwd}/check.mjs'；主手读修改代码审查，不重复运行测试。只操作当前目录，不联网。`;
+    } else if (name === "failure") {
+      await fs.writeFile(
+        `${cwd}/check.mjs`,
+        "console.log('FAIL: intentional fixture');process.exitCode=7;\n",
+      );
+      prompt = `让副手用原生PowerShell只运行一次 node '${cwd}/check.mjs'，随后输出EXITCODE并把Node退出码传给PowerShell退出码。这个脚本是预期失败的验收夹具，不改文件、不重试、不修复。主手据原生回执说明该次执行是否失败，不额外执行任何命令，不联网。`;
     } else {
       await fs.writeFile(
         `${cwd}/card.svg`,
@@ -89,12 +105,27 @@ try {
       prompt =
         "card.svg右边的红圆被画布截断。让副手最小修改使红圆完整位于画面中，保留蓝圆和HELLO文字，三个元素互不重叠。副手用Read/Edit或Write修改即可，主手用view_image独立看图验收。禁止命令和联网。";
     }
+    const protectedCheck =
+      name === "repair" ? await fs.readFile(`${cwd}/check.mjs`, "utf8") : undefined;
     const start = Date.now();
     try {
       await service.submit({ taskId: task.id, requestId: randomUUID(), text: prompt });
       const done = await settled(task.id);
       const elapsedMs = Date.now() - start;
       assert.equal(done.status, "completed", done.error);
+      if (name === "failure") {
+        const receipts = done.events
+          .filter((e) => e.role === "sidekick" && e.kind === "verification")
+          .map((e) => JSON.parse(e.text));
+        assert.equal(receipts.length, 1);
+        assert.equal(receipts[0].status, "failed");
+        assert.match(done.lead.lastReport!, /失败|非零/);
+        assert.match(done.lead.lastReport!, /7/);
+        assert.equal(
+          await fs.readFile(`${cwd}/check.mjs`, "utf8"),
+          "console.log('FAIL: intentional fixture');process.exitCode=7;\n",
+        );
+      }
       if (name === "frozen") {
         const s = await fs.readFile(`${cwd}/result.md`, "utf8");
         assert.match(s, /5/);
@@ -119,10 +150,7 @@ try {
           2.5,
         );
         assert.equal(sumPaid([{ status: "pending", amount: 10 }]), 0);
-        assert.equal(
-          (await fs.readFile(`${cwd}/check.mjs`, "utf8")).includes("3 checks passed"),
-          true,
-        );
+        assert.equal(await fs.readFile(`${cwd}/check.mjs`, "utf8"), protectedCheck);
       }
       if (name === "visual") {
         const svg = await fs.readFile(`${cwd}/card.svg`, "utf8");
@@ -146,6 +174,8 @@ try {
       const tokens = (done.usage ?? []).reduce((s, u) => s + u.outputTokens, 0);
       results.push({
         name,
+        sample,
+        taskId: task.id,
         passed: true,
         elapsedMs,
         outputTokens: tokens,
@@ -154,12 +184,22 @@ try {
           .filter((e) => e.kind === "tool" && !e.notExecuted)
           .map((e) => `${e.role}:${e.text}`),
         reportChars: (done.lead.lastReport?.length ?? 0) + (done.sidekick.lastReport?.length ?? 0),
+        nativeReceipts: done.events
+          .filter((e) => e.role === "sidekick" && e.kind === "verification")
+          .map((e) => JSON.parse(e.text)),
       });
     } catch (error) {
-      results.push({ name, passed: false, elapsedMs: Date.now() - start, error: String(error) });
+      results.push({
+        name,
+        sample,
+        taskId: task.id,
+        passed: false,
+        elapsedMs: Date.now() - start,
+        error: String(error),
+      });
     } finally {
       await fs.writeFile(
-        `${root}/${name}.json`,
+        `${root}/${name}-${sample}.json`,
         JSON.stringify(await service.read(task.id), null, 2),
       );
       if ((await service.read(task.id)).status === "running") await service.cancel(task.id);

@@ -4,18 +4,16 @@ import { join } from "node:path";
 import {
   query,
   createSdkMcpServer,
-  tool,
   type Query,
   type Options,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { z } from "zod";
 import type { EngineRun, EngineReport, HarnessAdapter } from "../app/ports.js";
 import { claudeExecutable } from "./paths.js";
-import { handoffToolDescription } from "../domain/handoffs.js";
 import { InputStream } from "./input-stream.js";
 import { permissionDenied } from "./permission-feedback.js";
-import { viewImage, visionDescription } from "./vision.js";
+import { claudeTools } from "./claude-tools.js";
+import { ClaudeReceiptTracker } from "./verification-receipts.js";
 import { claudeConnection } from "./claude-connection.js";
 
 export class ClaudeAdapter implements HarnessAdapter {
@@ -61,38 +59,8 @@ export class ClaudeAdapter implements HarnessAdapter {
       uuid: this.messageId,
     });
     await input.emit({ kind: "session", text: sessionId });
-    const tools = [
-      tool("view_image", visionDescription, { path: z.string().min(1) }, ({ path }) =>
-        viewImage(input, path),
-      ),
-      ...(input.handoff
-        ? [
-            tool(
-              "sidekick",
-              handoffToolDescription,
-              { message: z.string().min(1), block: z.boolean().optional() },
-              async ({ message, block }) => ({
-                content: [{ type: "text" as const, text: await input.handoff!(message, block) }],
-              }),
-            ),
-            tool("read_sidekick", "等待并读取副手报告。", {}, async () => ({
-              content: [{ type: "text" as const, text: await input.readSidekick!() }],
-            })),
-          ]
-        : []),
-      ...(input.readHandoffHistory
-        ? [
-            tool(
-              "read_handoff_history",
-              "逐字读取本任务交接历史，按nextOffset翻页，不依赖摘要猜测原文。",
-              { offset: z.number().int().nonnegative().optional() },
-              async ({ offset }) => ({
-                content: [{ type: "text" as const, text: await input.readHandoffHistory!(offset) }],
-              }),
-            ),
-          ]
-        : []),
-    ];
+    const tools = claudeTools(input),
+      receipts = new ClaudeReceiptTracker(input.emit);
     const effort = ["low", "medium", "high", "xhigh", "max"].includes(
       input.selection.thinking ?? "",
     )
@@ -226,6 +194,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       this.updateReady.resolve();
       for await (const message of this.active) {
         input.signal.throwIfAborted();
+        await receipts.observe(message);
         if (message.type === "stream_event") {
           const event = message.event;
           if (event.type === "message_start") responseId = event.message.id;
@@ -269,9 +238,6 @@ export class ClaudeAdapter implements HarnessAdapter {
               toolMs: null,
               ttftMs: null,
             });
-          }
-          for (const block of message.message.content) {
-            if (block.type === "tool_use") await input.emit({ kind: "tool", text: block.name });
           }
         } else if (message.type === "system" && message.subtype === "init") {
           await input.emit({ kind: "model", text: message.model, availableTools: message.tools });

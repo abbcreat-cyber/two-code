@@ -147,6 +147,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
     } else if (event.role === "sidekick" && handoff) {
       if (event.kind === "message") handoff.output!.text += event.text;
       if (event.kind === "tool") handoff.output!.text += `\n调用工具：${event.text}\n`;
+      if (event.kind === "verification") handoff.output!.text += `\n原生执行回执：${event.text}\n`;
       if (event.kind === "status" && event.text.startsWith("执行已结束")) {
         handoff.status = "success";
         handoff.endedAt = at;

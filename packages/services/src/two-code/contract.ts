@@ -72,6 +72,7 @@ export interface TaskEvent {
     | "message"
     | "reasoning"
     | "tool"
+    | "verification"
     | "status"
     | "error"
     | "handoff"

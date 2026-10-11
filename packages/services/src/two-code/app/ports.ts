@@ -13,7 +13,7 @@ export interface EngineEvent {
   availableTools?: string[];
   toolCallId?: string;
   notExecuted?: boolean;
-  kind: "message" | "reasoning" | "tool" | "session" | "model";
+  kind: "message" | "reasoning" | "tool" | "session" | "model" | "verification";
   text: string;
 }
 export interface EngineRun {

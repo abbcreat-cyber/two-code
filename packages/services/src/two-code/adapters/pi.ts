@@ -12,6 +12,7 @@ import { handleExtensionUi } from "./pi-extension-ui.js";
 import { writeStepOpeningExtension } from "./step-opening.js";
 import { rejectedToolEvent } from "./tool-outcome.js";
 import { nativeDeltaEvent } from "./stream-event.js";
+import { nativeVerificationEvent } from "./verification-receipts.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -312,6 +313,8 @@ export class PiAdapter implements HarnessAdapter {
           })
           .catch(rejectRun);
       } else if (record.type === "tool_execution_end") {
+        const receipt = nativeVerificationEvent(record);
+        if (receipt) void input.emit(receipt).catch(rejectRun);
         const start = tools.get(String(record.toolCallId));
         if (start) usage.toolMs += performance.now() - start;
         tools.delete(String(record.toolCallId));

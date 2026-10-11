@@ -3,6 +3,7 @@ import type { ActiveRun } from "./active-run.js";
 import type { EngineReport } from "./ports.js";
 import { sidekickPrompt } from "../domain/task.js";
 import { reviewReportNote, interruptionEvidenceNote } from "../domain/handoffs.js";
+import { verificationReport } from "../domain/verification-report.js";
 
 export function wakeChannel() {
   let resolve!: () => void;
@@ -38,7 +39,7 @@ export async function readSidekick(
   const updated =
     task.events.findLast((e) => e.kind === "handoff" || e.kind === "handoff_update")?.kind ===
     "handoff_update";
-  return `${report.text}\n\n${reviewReportNote}${updated ? interruptionEvidenceNote : ""}`;
+  return `${verificationReport(task)}副手报告：\n${report.text}\n\n${reviewReportNote}${updated ? interruptionEvidenceNote : ""}`;
 }
 
 export async function handoff(
