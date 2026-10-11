@@ -115,6 +115,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
         <div data-testid="two-code-permission" data-tool={permission.title}>
           <PermissionDialog
             workspacePath={props.workspacePath}
+            requesterLabel={permission.role === "lead" ? "主手" : "副手"}
             request={{
               type: "permission_request",
               taskId: props.sessionId!,
@@ -122,7 +123,8 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
               requestId: permission.id,
               kind: "tool",
               title: `${permission.role === "lead" ? "主手" : "副手"} · ${permission.title}`,
-              description: permission.detail,
+              // 申请角色由卡片标题呈现，不能依靠会被原生工具说明覆盖的description。
+              description: "",
               raw: { toolName: permission.title, input: safeJson(permission.detail) },
               options: [
                 {

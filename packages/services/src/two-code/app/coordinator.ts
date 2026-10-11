@@ -252,11 +252,12 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
         sessionId: actor.sessionId,
         prompt,
         systemPrompt:
-          role === "sidekick"
+          (role === "sidekick"
             ? sidekickInstruction
             : task.dual
               ? leadInstruction
-              : "所有面向用户的输出一律中文。核对真实证据后汇报。",
+              : "所有面向用户的输出一律中文。核对真实证据后汇报。") +
+          `\n本次真实工作目录：${task.workspacePath}。主副手共享此目录；此目录中的绝对路径与相对路径指向同一工作区，不需为确认目录另执行命令。`,
         signal: run.abort.signal,
         emit: async (event) => {
           if (run.abort.signal.aborted || this.active.get(task.id) !== run) return;

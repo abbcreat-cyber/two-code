@@ -8,6 +8,7 @@ import { ToolBridge, piToolExtension, stepToolExtension } from "./tool-bridge.js
 import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { subscriptionEnvironment } from "./chatgpt-subscription.js";
 import { piThinkingLevel } from "../domain/thinking.js";
+import { handleExtensionUi } from "./pi-extension-ui.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -47,7 +48,14 @@ export class PiAdapter implements HarnessAdapter {
       throw new Error("请选择Step Code的API或订阅连接，不会回退到其他渠道");
     await mkdir(input.sessionDir, { recursive: true });
     const promptFile = join(input.sessionDir, "two-code-instructions.txt");
-    await writeFile(promptFile, input.systemPrompt, "utf8");
+    await writeFile(
+      promptFile,
+      input.systemPrompt +
+        (process.platform === "win32"
+          ? "\n当前是Windows。读取文件优先用read_file/read，查找用find_files/find。只有任务允许命令时才执行：PowerShell脚本直接交给原生powershell工具，不经run_command或Bash包装；不要用pwd && ls、od、wc等Unix命令代替文件读取。"
+          : ""),
+      "utf8",
+    );
     const args = [
       ...(step ? [] : [entry]),
       "--mode",
@@ -283,22 +291,9 @@ export class PiAdapter implements HarnessAdapter {
         if (start) usage.toolMs += performance.now() - start;
         tools.delete(String(record.toolCallId));
       } else if (record.type === "extension_ui_request") {
-        void input
-          .permission(
-            String(record.title ?? `${this.label} 请求`),
-            String(record.message ?? record.method ?? "确认"),
-          )
-          .then((confirmed) =>
-            this.child?.stdin.write(
-              JSON.stringify({
-                type: "extension_ui_response",
-                id: record.id,
-                confirmed,
-                cancelled: !confirmed,
-              }) + "\n",
-            ),
-          )
-          .catch(rejectRun);
+        void handleExtensionUi(record, input, this.label, (response) => {
+          this.child?.stdin.write(JSON.stringify(response) + "\n");
+        }).catch(rejectRun);
       } else if (record.type === "agent_settled")
         lastError ? rejectRun(new Error(lastError)) : resolveRun();
     };

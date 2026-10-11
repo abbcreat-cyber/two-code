@@ -10,6 +10,8 @@ UI重开先读快照再消费单调序号变化。Host重启将未完成任务�
 
 Step Code以step-code标识接入同一Coordinator，执行本机step.exe原生RPC。step-api和step-plan保留不同provider身份，显示Step-5 API与Step-5订阅，模型ID仍为step-5-preview。只读导入配置，准入冻结后写角色私有目录。执行前检查权限扩展已加载，Step/Pi的权限通道失败必须阻断工具。Windows原生powershell存在时直接启用，不能用Bash包装冒充。详见specs/two-code/step-code.md。
 
+Pi/Step扩展UI按原生method分流：终端展示通知不创建权限，confirm才进入权限裁决；目前不支持的字符串交互取消并报错，禁止用布尔批准伪造用户答案。前端权限标题显示申请角色，工具参数仍复用原生预览。主副手指令约束重复验收及工具范围，但不替代权限所有者。
+
 modelThinkingProfiles是官方档位的固定快照，selectionThinkingProfile与normalizeThinkingSelection供UI和运行准入共享。没有默认菜单项，已知模型归一为显式档位；未收录模型不猜选项。来源与更新日期见specs/two-code/official-thinking-levels.md。Pi模型能力与off/开启的协议映射只在适配层处理。
 
 ChatGPT套餐连接的公共authentication字段为chatgpt；凭据路径与令牌不出Host。EngineConnection.subscription携带冻结的专属agent目录、Node和代理，Pi原生OAuth共享文件锁负责刷新，角色session仍独立。固定官方端点不可经UI更改；测试连接也调用同一Pi原生授权链。

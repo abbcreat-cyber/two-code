@@ -433,10 +433,12 @@ export function PermissionDialog({
   provider,
   responding = false,
   responseError,
+  requesterLabel,
 }: {
   request: ZCodePermissionRequest;
   responding?: boolean;
   responseError?: string;
+  requesterLabel?: string;
   onRespond: (requestId: string, option: ZCodePermissionOption, feedback?: string) => void;
   workspacePath: string;
   provider?: ZCodeProvider;
@@ -697,6 +699,7 @@ export function PermissionDialog({
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-ui-base font-medium leading-tight text-foreground-subtle">
                 {intl.formatMessage({ id: "chat.permission.title" })}
+                {requesterLabel ? ` · ${requesterLabel}` : ""}
               </p>
               <InteractionRequestOriginBadge origin={request.origin} />
             </div>
