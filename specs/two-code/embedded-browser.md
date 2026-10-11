@@ -11,7 +11,7 @@ Step原生browser / Claude MCP browser
   → 原生结构化状态/DOM/像素 → 主副手工具回执与前端浏览器标签
 ```
 
-只在Host确有浏览器执行器时公布工具，缺失明确不可用，不自动换外部浏览器。公开navigate/back/forward/reload/snapshot/click/fill/type/press/scroll/hover/select/check/screenshot/getState/newTab/list/close；沿用共享BrowserCommand schema，拒绝内部生命周期、跨会话认领及未知指令。输入用JSON request字符串，描述给出准确示例。request命名是语义边界：实测Step会将command字段误当shell语句并另弹命令审批，浏览器JSON不得走shell解析。只读snapshot/getState/list/screenshot可直接读；其他动作按现有模式进行权限裁决，plan拒绝变更，edit/build确认，yolo允许；取消之后不再发新命令，也不把迟到结果记为当前执行成功，已送到Main的动作不宣称撤销。
+只在Host确有浏览器执行器时公布工具，缺失明确不可用，不自动换外部浏览器。公开navigate/back/forward/reload/snapshot/click/fill/type/press/scroll/hover/select/check/screenshot/getState/newTab/list/close；沿用共享BrowserCommand schema，拒绝内部生命周期、跨会话认领及未知指令。request接收命令对象，也兼容JSON字符串，描述给出准确示例。request命名是语义边界：实测Step会将command字段误当shell语句并另弹命令审批，浏览器JSON不得走shell解析。只读snapshot/getState/list/screenshot可直接读；其他动作按现有模式进行权限裁决，plan拒绝变更，edit/build确认，yolo允许；取消之后不再发新命令，也不把迟到结果记为当前执行成功，已送到Main的动作不宣称撤销。
 
 截图通过原生image内容块返回模型，文本只附真实元数据，不把base64塞进回执文本。主副手不得把文字描述当像素验收。ZCode继续使用自身原生browser路径，不增加重复工具。
 
@@ -34,3 +34,32 @@ Step原生browser / Claude MCP browser
 验证：94项Two Code及填充回归通过；仓库常规typecheck、lint（0错误/70条原有警告）、架构检查通过。额外执行desktop Main全量类型检查有87条诊断，同轮修复前后错误列表完全一致，未计作通过。本次修改文件无新增类型诊断；该额外检查产生的无关编译文件已撤销/删除。
 
 本轮试验任务与原生会话按独立QA目录所有权清理，仅保留精简报告和必要截图。实际覆盖本地网页的打开、DOM、清空/填值/点击、视觉及两轮交接；未验证任意外网、登录态网站或所有浏览器工具。
+
+## 多标签、恢复与任务隔离回归
+
+在同一真实桌面Host创建A/B两个内置标签，副手只改B，主手核验A未变及列表中两个真实tabId。第二阶段刷新B，验证服务端持久值仍可读；用明确不存在的ref做一次负向fill，要求ref_not_found且没有写入，然后重新snapshot取得真实ref继续修改。新建独立Two Code任务，主副手的list均不得看到A/B，使用旧任务tabId也必须失败；该负向测试不认领、不关闭旧任务页面。最后回到原任务，仅关闭B，确认A仍存在。
+
+验收器保存每次原生browser request和结构化result，结合页面服务端写入/加载账本与Electron guest清单校验；不靠最终回答判断隔离成功。仅测试本机随机端口测试页，每轮300秒截止，窗口离屏不可聚焦；结束后用既有所有权清理脚本删除试验会话。浏览器状态仍由Main唯一持有，不为验收增加产品缓存或特殊运行分支。
+
+### 首次导航交接
+
+实测首次navigate返回ok但state/meta仍为about:blank，需要模型再次导航。冷启动的全新空白guest不能在did-attach就交给Main执行：bootstrap src可能尚未提交；必须由dom-ready确认该guest完成初始加载后再上报。所有上报入口共享同一个ready guestId门控，避免selected变化提前放行。已有guest换绑、显式初始URL和residency历史恢复保留原有提前接管路径，不延后这些特殊路径。
+
+```text
+普通新guest: did-attach → 初始dom-ready → reportGuest → Main命令
+历史恢复: did-attach → 撤销bootstrap src → reportGuest → Main恢复 → dom-ready
+```
+
+导航执行器在loadURL完成后仍须检查真实state；请求网页却停留空地址/about:blank时返回execution_error，不伪造成功，不靠加长等待或自动重试掩盖时序问题。
+
+实测副手把request按命令对象提交时，原生SDK因只允许字符串而拒绝，模型需再编码一次JSON。主副手工具schema统一允许对象和既有JSON字符串，两者都进入同一个共享命令schema和权限路径；不放宽额外字段、内部命令或任务scope。验收器也区分开场门禁的未执行尝试与真实后端结果，错误结果兼容SDK的字符串content及内容块数组。
+
+### 0.8.23 实测结果
+
+`D:/Apps/TwoCode/reports/embedded-browser-1791727990057`保存最终四项验收：多标签61.5秒，刷新/负向引用恢复48.3秒，跨任务隔离42.0秒，定向关闭30.3秒。原任务三轮主副手原生session保持一致；独立隔离任务使用另一组session。
+
+服务端GET账本恰为`a,b,b`：A与B均首次导航成功，仅B随后刷新一次；没有为纠正空白页重复navigate。输入/保存账本均只有B的两次值变更，A从未被输入或保存。不存在的ref返回ref_not_found，跨任务getState返回backend_unavailable且没有页面内容；新任务两角色list均为空。关闭B后，原任务list和实际Electron webview清单均只剩A。
+
+模型曾把url附给newTab，被严格schema拒绝后自行改为newTab→navigate，没有产生额外标签；这是调用参数错误，未被伪装成后端执行成功。本轮没有因request对象/字符串形态发生拒绝。未执行的开场门禁尝试与两项预期负向结果单列，不按普通执行故障计。
+
+97项相关回归通过，常规typecheck、lint（0错误/原有70警告）和架构检查通过。没有扩展为所有站点或所有历史恢复场景的全面验收；恢复路径沿用既有逻辑，未声称本轮做过进程崩溃恢复测试。

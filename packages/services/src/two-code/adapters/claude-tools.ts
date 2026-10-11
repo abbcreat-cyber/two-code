@@ -10,8 +10,11 @@ export function claudeTools(input: EngineRun) {
   return [
     ...(input.browser
       ? [
-          tool("browser", browserDescription, { request: z.string().min(1) }, ({ request }) =>
-            runBrowserTool(input, request),
+          tool(
+            "browser",
+            browserDescription,
+            { request: z.union([z.string().min(1), z.record(z.string(), z.unknown())]) },
+            ({ request }) => runBrowserTool(input, request),
           ),
         ]
       : []),

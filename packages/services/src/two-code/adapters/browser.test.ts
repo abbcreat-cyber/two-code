@@ -111,6 +111,37 @@ test("像素作为原生image返回，错误保留结构化事实且不降级到
   await assert.rejects(runBrowserTool(input(), '{"method":"list"}'), /未连接/);
 });
 
+test("结构化request与JSON字符串走相同命令校验和权限路径", async () => {
+  let calls = 0;
+  for (const request of [{ method: "snapshot" }, '{"method":"snapshot"}']) {
+    const response = await runBrowserTool(
+      input({
+        browser: async (command) => {
+          assert.equal(command.method, "snapshot");
+          calls++;
+          return { ok: true, elapsedMs: 0 };
+        },
+        permission: (tool, detail) =>
+          permissionDecision("plan", tool, detail, "D:/fixture").then((v) => v === "allow"),
+      }),
+      request,
+    );
+    assert.equal(response.isError, false);
+  }
+  await assert.rejects(
+    runBrowserTool(
+      input({
+        browser: async () => {
+          calls++;
+          return { ok: true, elapsedMs: 0 };
+        },
+      }),
+      { method: "list", sessionId: "foreign" },
+    ),
+  );
+  assert.equal(calls, 2);
+});
+
 test("发现浏览器过程中取消，不补发已经过期的导航", async () => {
   const abort = new AbortController();
   let calls = 0;

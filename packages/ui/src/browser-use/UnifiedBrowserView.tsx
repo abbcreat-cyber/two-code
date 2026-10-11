@@ -41,7 +41,7 @@ type PendingGuestNavigationCompletion = {
  * 彻底解决 WebContentsView 原生层遮挡菜单的问题）。human 的导航/前进后退/刷新/元素拾取
  * 直接调用 webview 方法（低延迟、无握手依赖）；chrome 状态由 webview 事件驱动。
  *
- * 同时在 did-attach 时把 guest 的 webContentsId 上报给 main（browserViewAttachGuest），
+ * 恢复态在 did-attach、普通全新空白页在 dom-ready 后把 guest 的 webContentsId 上报给 main，
  * 让 main 能给该 guest 挂 CDP（webContents.debugger），供 agent 通过协议控制这个 tab。
  *
  * chrome 复用 EmbeddedBrowserPaneParts 的 BrowserToolbar；
@@ -223,6 +223,7 @@ export function UnifiedBrowserView({
     webContentsId: number;
     scopeFingerprint: string;
   } | null>(null);
+  const domReadyGuestIdRef = useRef(0);
   const wasResponsiveModeRef = useRef(false);
   // guest 销毁归因打点：线上主进程 UAF（EXC_BAD_ACCESS at
   // 0x10，DevToolsSession 在途通知访问已析构 client）发生前，main 日志只能看到
@@ -304,6 +305,15 @@ export function UnifiedBrowserView({
       if (typeof webview.getWebContentsId !== "function") return;
       const webContentsId = safeWebviewCall(() => webview.getWebContentsId(), 0);
       if (webContentsId <= 0) return;
+      // 首次agent导航曾被尚未提交的about:blank src覆盖。冷启动空白guest必须等dom-ready；
+      // 已有guest换绑、显式初始URL及residency历史恢复仍保留原有提前接管路径。
+      if (
+        !isResidencyRestore &&
+        !hasInitialNavigation &&
+        !lastReportedGuestRef.current &&
+        domReadyGuestIdRef.current !== webContentsId
+      )
+        return;
       const effectiveWorkspaceKey = workspaceKey ?? (workspaceIdentity?.trim() || workspacePath);
       const scopeFingerprint = JSON.stringify({
         active,
@@ -354,6 +364,8 @@ export function UnifiedBrowserView({
     },
     [
       browserKey,
+      hasInitialNavigation,
+      isResidencyRestore,
       platform,
       remoteSessionId,
       residencyGeneration,
@@ -455,6 +467,7 @@ export function UnifiedBrowserView({
     };
 
     const handleDomReady = () => {
+      domReadyGuestIdRef.current = safeWebviewCall(() => webview.getWebContentsId(), 0);
       // Electron/Chromium 会把主窗口页面 zoom 继续传播到 guest；仅补偿外层
       // transform 时，guest innerWidth/DPR 仍会变化。自由尺寸必须把 guest zoom 固定为 1，
       // 普通模式仍交给 Electron 自然传播，避免主动改写网页 zoom。

@@ -14,7 +14,7 @@ const definitions = [
     inputSchema: {
       type: "object",
       // Step会把command字段当作shell审批；浏览器请求必须使用独立参数名。
-      properties: { request: { type: "string" } },
+      properties: { request: { anyOf: [{ type: "string" }, { type: "object" }] } },
       required: ["request"],
     },
   },
@@ -245,7 +245,7 @@ export default function(pi) {
   };
   pi.registerTool({name:'check_text_encoding',label:'检查文本格式',description:${JSON.stringify(textFactsDescription)},parameters:Type.Object({path:Type.String()}),execute:(id,args,signal)=>call('check_text_encoding',args,signal)});
   pi.registerTool({name:'view_image',label:'查看图片',description:${JSON.stringify("查看本地PNG/JPEG/WebP/GIF/SVG的真实像素。SVG自动内置渲染，无需系统命令或浏览器。视觉验收请直接使用此工具。")},parameters:Type.Object({path:Type.String()}),execute:(id,args,signal)=>call('view_image',args,signal)});
-  if (process.env.TWO_CODE_HAS_BROWSER === '1') pi.registerTool({name:'browser',label:'内置浏览器',description:${JSON.stringify(browserDescription)},parameters:Type.Object({request:Type.String()}),execute:(id,args,signal)=>call('browser',args,signal)});
+  if (process.env.TWO_CODE_HAS_BROWSER === '1') pi.registerTool({name:'browser',label:'内置浏览器',description:${JSON.stringify(browserDescription)},parameters:Type.Object({request:Type.Union([Type.String(),Type.Record(Type.String(),Type.Unknown())])}),execute:(id,args,signal)=>call('browser',args,signal)});
   if (process.env.TWO_CODE_HAS_HISTORY === '1') pi.registerTool({name:'read_handoff_history',label:'交接历史',description:'读取本任务逐字交接历史，按nextOffset翻页；压缩后按需恢复确切原文。',parameters:Type.Object({offset:Type.Optional(Type.Integer({minimum:0}))}),execute:(id,args,signal)=>call('read_handoff_history',args,signal)});
   if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
   pi.registerTool({name:'sidekick',label:'副手',description:${JSON.stringify(handoffToolDescription)},parameters:Type.Object({message:Type.String(),block:Type.Optional(Type.Boolean())}),execute:(id,args,signal)=>call('sidekick',args,signal)});

@@ -110,7 +110,8 @@ async function nativeBrowserEvidence(task, role) {
         /^(browser|mcp__two_code__browser)$/.test(block.name)
       ) {
         try {
-          calls.set(block.id, JSON.parse((block.arguments ?? block.input).request));
+          const request = (block.arguments ?? block.input).request;
+          calls.set(block.id, typeof request === "string" ? JSON.parse(request) : request);
         } catch {}
       }
       if (block.type === "tool_result" && calls.has(block.tool_use_id))

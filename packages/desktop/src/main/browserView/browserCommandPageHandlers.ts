@@ -204,7 +204,20 @@ export async function handleNavigate(
       },
     });
   }
-  return done({ ok: true, state: readState(view.webContents) });
+  const state = readState(view.webContents);
+  // loadURL的Promise可能被bootstrap空白页完成事件结算；不能把空白页当作网页导航成功。
+  if (command.url !== "about:blank" && (!state.url || state.url === "about:blank")) {
+    return done({
+      ok: false,
+      error: {
+        code: "execution_error",
+        message:
+          "Navigation completed without committing the requested page (guest is still blank)",
+        sideEffect: "uncertain",
+      },
+    });
+  }
+  return done({ ok: true, state });
 }
 
 export async function handleGetState(
