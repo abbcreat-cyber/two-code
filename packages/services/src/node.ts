@@ -2681,6 +2681,7 @@ export function createLocalServices(options: {
   const log = createServiceLogger("provider-runtime");
   void providerRuntime.start().then(
     () => {
+      if (providerRuntime.isDisposed) return;
       const snapshot = providerRuntime.registryService.getSnapshot()!;
       log.info("Provider Registry 已就绪", {
         configRevision: snapshot.sourceRevisions.config,
@@ -2688,6 +2689,8 @@ export function createLocalServices(options: {
       });
     },
     (error: unknown) => {
+      // 正常关闭使尚未完成的初始化失效，不应误报模型配置损坏；存活实例仍记录真实错误。
+      if (providerRuntime.isDisposed) return;
       log.error("Provider 配置事实初始化失败", error);
     },
   );

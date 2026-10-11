@@ -114,10 +114,19 @@ export class ProviderRuntime {
     this.modelSelection = this.#modelSelectionRuntime;
   }
 
+  get isDisposed(): boolean {
+    return this.#disposed;
+  }
+
   start(): Promise<void> {
     if (this.#disposed) throw new Error("ProviderRuntime 已 dispose");
     if (this.#startPromise) return this.#startPromise;
-    const startPromise = this.#configRuntime.start().then(() => this.registryService.start());
+    const startPromise = this.#configRuntime.start().then(async () => {
+      // 快速重开/关闭可能早于初始化回包；跨await后不能启动已销毁注册表或宣告就绪。
+      if (this.#disposed) throw new Error("ProviderRuntime 已 dispose");
+      await this.registryService.start();
+      if (this.#disposed) throw new Error("ProviderRuntime 已 dispose");
+    });
     this.#startPromise = startPromise;
     void startPromise.catch(() => {
       if (this.#startPromise === startPromise) this.#startPromise = null;

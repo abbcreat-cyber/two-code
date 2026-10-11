@@ -55,9 +55,12 @@ export class NodePersonalProviderConfigRepository implements PersonalProviderCon
     this.#assertNotDisposed();
     try {
       const snapshot = await this.#readCurrent();
+      this.#assertNotDisposed();
       this.#observedRevision ??= snapshot.revision;
       return snapshot;
     } catch (error) {
+      // 关闭使在飞读取失效，不代表磁盘损坏；不能误报恢复或以空配置覆盖本次结果。
+      this.#assertNotDisposed();
       const snapshot = this.#recoverInvalidFile(error);
       this.#observedRevision ??= snapshot.revision;
       return snapshot;
@@ -112,6 +115,7 @@ export class NodePersonalProviderConfigRepository implements PersonalProviderCon
     // 多个进程纯读取也争排他锁，慢 IO 会把轮询放大成锁超时。
     // 正式文件通过同目录临时文件原子替换，纯读可以直接观察已提交的完整文档。
     const file = await readJsonFileIfExists(this.#filePath);
+    this.#assertNotDisposed();
     if (file === null && !this.#importLegacy) return snapshotFromUpdate(emptyUpdate());
     if (file !== null) {
       const update = decodeProviderConfigFile(file.value);
@@ -125,8 +129,10 @@ export class NodePersonalProviderConfigRepository implements PersonalProviderCon
 
   async #readLocked(): Promise<ProviderConfigLayerSnapshot> {
     const file = await readJsonFileIfExists(this.#filePath);
+    this.#assertNotDisposed();
     if (file === null) {
       const imported = await this.#importLegacy?.();
+      this.#assertNotDisposed();
       const update = imported ?? emptyUpdate();
       if (imported) return snapshotFromUpdate(await this.#writeLocked(update));
       return snapshotFromUpdate(update);
@@ -141,6 +147,7 @@ export class NodePersonalProviderConfigRepository implements PersonalProviderCon
   }
 
   async #writeLocked(update: ProviderConfigLayerUpdate): Promise<ProviderConfigLayerUpdate> {
+    this.#assertNotDisposed();
     // 同一入口写入规则与默认选择；先严格验证整份结果，不能落盘后才发现来源越权/坏值。
     // 使用与读取相同的规范形态再计算版本，避免外层规则键顺序使“写成功”的版本读回就变化。
     const canonical = decodeProviderConfigFile(encodeProviderConfigFile(update));
