@@ -168,7 +168,22 @@ try {
         assert.equal(money.formatMoney(0), "0.00");
         assert.equal(money.formatMoney(null), "—");
         assert.equal(invoice.invoice(12.5), "Total: 12.50");
-        assert.equal(done.events.filter((e) => e.kind === "verification").length, 1);
+        // 准入拒绝也有verification；不能把主手未执行的尝试误算为副手重复执行。
+        assert.equal(
+          done.events.filter(
+            (e) => e.kind === "verification" && JSON.parse(e.text).status !== "not-executed",
+          ).length,
+          1,
+        );
+        assert.equal(
+          done.events.filter(
+            (e) =>
+              e.role === "sidekick" &&
+              e.kind === "verification" &&
+              JSON.parse(e.text).status === "completed",
+          ).length,
+          1,
+        );
       } else if (name === "docs") {
         const text = await fs.readFile(`${cwd}/使用说明.md`, "utf8");
         for (const token of ["# Demo Tool", "node app.mjs", "8080"]) assert(text.includes(token));
