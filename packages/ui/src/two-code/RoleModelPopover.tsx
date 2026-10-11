@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown, Settings2, Search } from "lucide-react";
+import { Check, ChevronDown, Settings2 } from "lucide-react";
 import type { ActorRole, EngineSelection, HarnessInfo } from "@zcode/services";
 import { normalizeThinkingSelection } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
@@ -41,16 +41,13 @@ export function RoleModelPopover({
   onManage(): void;
 }) {
   const [open, setOpen] = useState(false),
-    [query, setQuery] = useState(""),
     [saving, setSaving] = useState(false),
     [error, setError] = useState("");
   const label = role === "lead" ? "主手" : "副手";
   const levels = thinkingOptions(selection, catalog);
   const thinking = normalizeThinkingSelection(selection, catalog).thinking;
   const harness = catalog.find((h) => h.id === selection.harness);
-  const candidates = modelChoices(catalog, selection).filter((m) =>
-    `${m.name} ${m.selection.model} ${m.connection}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const candidates = modelChoices(catalog, selection);
   const compatible = candidates.filter((m) => m.selection.harness === selection.harness);
   const apply = async (operation: () => Promise<void>, close: boolean) => {
     setSaving(true);
@@ -71,7 +68,6 @@ export function RoleModelPopover({
       onOpenChange={(value) => {
         setOpen(value);
         if (value) {
-          setQuery("");
           setError("");
         }
       }}
@@ -148,16 +144,6 @@ export function RoleModelPopover({
               换模型保留上下文；换脚手架请新建任务。
             </p>
           )}
-          <div className="flex items-center gap-2 rounded-lg border border-input-border bg-input px-2">
-            <Search className="size-3.5 text-foreground-subtle" />
-            <input
-              aria-label={`${label}搜索模型`}
-              placeholder="搜索模型"
-              className="h-8 min-w-0 flex-1 bg-transparent text-ui-base outline-none"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
         </div>
         <div
           className="min-h-0 max-h-60 flex-1 overflow-y-auto p-1"

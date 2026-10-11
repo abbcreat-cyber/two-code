@@ -1,14 +1,5 @@
 import { useId, useState } from "react";
-import {
-  Check,
-  Plus,
-  MoreHorizontal,
-  Pencil,
-  Star,
-  RefreshCw,
-  Trash2,
-  ArrowLeft,
-} from "lucide-react";
+import { Check, MoreHorizontal, Pencil, Star, RefreshCw, Trash2, ArrowLeft } from "lucide-react";
 import type {
   ActorRole,
   HarnessInfo,
@@ -26,6 +17,8 @@ import {
 } from "@/components/ui/dropdown-menu.js";
 import { useTwoCodeCombinations } from "@/hooks/useTwoCodeCombinations.js";
 import { selectedModelName, sameModel, thinkingLabels } from "./modelChoices.js";
+import { CombinationAddMenu } from "./CombinationAddMenu.js";
+import { CombinationEditor } from "./CombinationEditor.js";
 
 function matches(a: TwoCodePreferences, b: TwoCodePreferences) {
   return (
@@ -78,11 +71,14 @@ export function CombinationPicker({
   const library = useTwoCodeCombinations(workspacePath);
   const nameId = useId();
   const [editing, setEditing] = useState<{
-      kind: "save" | "rename" | "replace" | "delete";
+      kind: "save" | "custom" | "rename" | "replace" | "delete";
       item?: TwoCodeCombination;
     }>(),
     [name, setName] = useState(""),
     [newName, setNewName] = useState(""),
+    [customName, setCustomName] = useState(""),
+    [custom, setCustom] = useState<TwoCodePreferences>(),
+    [snapshot, setSnapshot] = useState(value),
     [notice, setNotice] = useState(""),
     [localError, setLocalError] = useState(""),
     [preferred, setPreferred] = useState<string>();
@@ -93,7 +89,9 @@ export function CombinationPicker({
     items.find((c) => matches(c.preferences, value))
   )?.id;
   const begin = (kind: NonNullable<typeof editing>["kind"], item?: TwoCodeCombination) => {
-    setName(item?.name ?? newName);
+    setName(item?.name ?? (kind === "custom" ? customName : newName));
+    if (kind === "custom" && !custom) setCustom(value);
+    if (kind === "save" || kind === "replace") setSnapshot(value);
     setLocalError("");
     setNotice("");
     setEditing({ kind, item });
@@ -119,9 +117,17 @@ export function CombinationPicker({
             : await library.save({
                 id: item?.id,
                 name: kind === "replace" ? item!.name : name,
-                ...(kind === "save" || kind === "replace" ? { preferences: value } : {}),
+                ...(kind === "custom"
+                  ? { preferences: custom }
+                  : kind === "save" || kind === "replace"
+                    ? { preferences: snapshot }
+                    : {}),
               });
         if (kind === "save") setNewName("");
+        if (kind === "custom") {
+          setCustomName("");
+          setCustom(undefined);
+        }
         return result;
       },
       kind === "delete" ? "组合已删除" : "组合已保存",
@@ -144,9 +150,13 @@ export function CombinationPicker({
           )}
           <h3 className="text-ui-base font-semibold text-foreground">
             {editing
-              ? { save: "保存当前组合", rename: "重命名", replace: "更新组合", delete: "删除组合" }[
-                  editing.kind
-                ]
+              ? {
+                  save: "保存当前组合",
+                  custom: "自定义组合",
+                  rename: "重命名",
+                  replace: "更新组合",
+                  delete: "删除组合",
+                }[editing.kind]
               : "AI 组合"}
           </h3>
           {!editing && library.view && (
@@ -158,19 +168,7 @@ export function CombinationPicker({
             </span>
           )}
         </div>
-        {!editing && (
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="保存当前配置为新组合"
-            title="保存当前配置为新组合"
-            data-testid="two-code-combination-add"
-            disabled={disabled || !library.view}
-            onClick={() => begin("save")}
-          >
-            <Plus className="size-4" />
-          </Button>
-        )}
+        {!editing && <CombinationAddMenu disabled={disabled || !library.view} onChoose={begin} />}
       </div>
       {editing ? (
         <form
@@ -191,7 +189,17 @@ export function CombinationPicker({
             </p>
           ) : (
             <>
-              {(editing.kind === "save" || editing.kind === "rename") && (
+              {editing.kind === "custom" && custom && (
+                <CombinationEditor
+                  value={custom}
+                  catalog={catalog}
+                  disabled={disabled}
+                  onChange={setCustom}
+                />
+              )}
+              {(editing.kind === "save" ||
+                editing.kind === "custom" ||
+                editing.kind === "rename") && (
                 <div className="space-y-1.5">
                   <label htmlFor={nameId} className="text-ui-xs text-foreground-subtle">
                     组合名称
@@ -203,6 +211,7 @@ export function CombinationPicker({
                     onChange={(e) => {
                       setName(e.target.value);
                       if (editing.kind === "save") setNewName(e.target.value);
+                      if (editing.kind === "custom") setCustomName(e.target.value);
                     }}
                     maxLength={40}
                     placeholder="例如：日常协作"
@@ -211,12 +220,14 @@ export function CombinationPicker({
                   />
                 </div>
               )}
-              <div className="rounded-lg bg-surface px-3 py-2.5">
-                <Summary
-                  value={editing.kind === "rename" ? editing.item!.preferences : value}
-                  catalog={catalog}
-                />
-              </div>
+              {editing.kind !== "custom" && (
+                <div className="rounded-lg bg-surface px-3 py-2.5">
+                  <Summary
+                    value={editing.kind === "rename" ? editing.item!.preferences : snapshot}
+                    catalog={catalog}
+                  />
+                </div>
+              )}
               {editing.kind === "replace" && (
                 <p className="text-ui-xs text-foreground-subtle">
                   用当前配置更新「{editing.item?.name}」。
@@ -241,7 +252,11 @@ export function CombinationPicker({
               variant={editing.kind === "delete" ? "destructive" : "secondary"}
               data-testid="two-code-combination-confirm"
               disabled={
-                disabled || ((editing.kind === "save" || editing.kind === "rename") && !name.trim())
+                disabled ||
+                ((editing.kind === "save" ||
+                  editing.kind === "custom" ||
+                  editing.kind === "rename") &&
+                  !name.trim())
               }
             >
               {library.busy

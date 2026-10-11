@@ -89,7 +89,7 @@ export function TwoCodeModelControls({
         <PopoverContent
           align="start"
           side="top"
-          className="w-88 max-w-[calc(100vw-1.5rem)] gap-0 overflow-hidden p-0"
+          className="max-h-[var(--radix-popover-content-available-height)] w-88 max-w-[calc(100vw-1.5rem)] gap-0 overflow-y-auto p-0"
           data-testid="two-code-collaboration-panel"
         >
           <CombinationPicker

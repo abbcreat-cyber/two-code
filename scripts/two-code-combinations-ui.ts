@@ -109,6 +109,73 @@ try {
   await open();
   checks.push("save-does-not-submit-draft");
   checks.push("legacy-rename");
+  await close();
+  for (const role of ["lead", "sidekick"]) {
+    await page.getByTestId(`two-code-${role}-model`).click();
+    assert.equal(await page.getByTestId(`two-code-${role}-panel`).getByRole("textbox").count(), 0);
+    await page
+      .getByTestId(`two-code-${role}-panel`)
+      .screenshot({ path: `${root}/${role}-no-search.png` });
+    await page.getByTestId(`two-code-${role}-model`).click();
+  }
+  checks.push("model-search-removed");
+  const unchangedLead = await page.getByTestId("two-code-lead-model").getAttribute("title");
+  const unchangedSidekick = await page.getByTestId("two-code-sidekick-model").getAttribute("title");
+  const unchangedDefault = await store.read();
+  await page.getByTestId("two-code-composer").fill("自定义组合也不能发送这段草稿。");
+  await open();
+  await page.getByTestId("two-code-combination-add").click();
+  await page.getByRole("menu").screenshot({ path: `${root}/add-menu.png` });
+  await page.getByTestId("two-code-combination-custom").click();
+  await page.getByRole("combobox", { name: "自定义主手模型", exact: true }).click();
+  assert.equal(await page.getByRole("option").filter({ hasText: "Step-5 API" }).count(), 1);
+  assert.equal(await page.getByRole("option").filter({ hasText: "Step-5 订阅" }).count(), 1);
+  await page.getByRole("listbox").screenshot({ path: `${root}/custom-models.png` });
+  await page.getByRole("option").filter({ hasText: "Step-5 API" }).click();
+  await page.getByRole("combobox", { name: "自定义副手模型", exact: true }).click();
+  await page.getByRole("option", { name: "无", exact: true }).click();
+  assert(
+    await page.getByRole("combobox", { name: "自定义副手思考档位", exact: true }).isDisabled(),
+  );
+  await page.getByTestId("two-code-combination-name").fill("自定义单模型");
+  await page.getByRole("combobox", { name: "自定义权限模式", exact: true }).click();
+  await page.getByRole("option", { name: "计划模式", exact: true }).click();
+  await panel.screenshot({ path: `${root}/custom-dark.png` });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(850, 720));
+  await panel.screenshot({ path: `${root}/custom-narrow.png` });
+  await page.getByTestId("two-code-combination-name").press("Enter");
+  await row("自定义单模型").waitFor();
+  const customSaved = (await store.combinations()).items.find((c) => c.name === "自定义单模型")!;
+  assert.equal(customSaved.preferences.dual, false);
+  assert.equal(customSaved.preferences.mode, "plan");
+  assert.notEqual(customSaved.preferences.lead.provider, "step-plan");
+  assert.deepEqual(await store.read(), unchangedDefault);
+  assert.equal(await page.getByTestId("two-code-lead-model").getAttribute("title"), unchangedLead);
+  assert.equal(
+    await page.getByTestId("two-code-sidekick-model").getAttribute("title"),
+    unchangedSidekick,
+  );
+  assert.equal(
+    await page.getByTestId("two-code-composer").innerText(),
+    "自定义组合也不能发送这段草稿。",
+  );
+  assert.equal(
+    (await fs.readdir(`${root}/data/tasks`)).filter((n) => n.endsWith(".json")).length,
+    0,
+  );
+  checks.push("custom-save-isolated-and-keyboard-submit");
+  await manage("自定义单模型", "删除组合");
+  await page.getByTestId("two-code-combination-confirm").click();
+  await page.getByTestId("two-code-combination-add").waitFor();
+  await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-custom").click();
+  await panel.getByRole("button", { name: "取消", exact: true }).click();
+  assert.equal((await store.combinations()).items.length, 1);
+  checks.push("custom-cancel-no-write");
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1280, 1000));
+  await close();
+  await page.getByTestId("two-code-composer").fill("");
+  await open();
   assert.equal(await page.getByText("ZCode 原生模式", { exact: true }).count(), 0);
   assert.equal(await panel.getByRole("button", { name: /^(单角色|双角色)$/ }).count(), 0);
   await close();
@@ -121,21 +188,18 @@ try {
   );
   await open();
   await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-save-current").click();
   await nameAndSave("快速处理");
   await close();
-  await page.getByTestId("two-code-sidekick-model").click();
-  await page
-    .getByTestId("two-code-sidekick-panel")
-    .locator('[data-model-id="claude-sonnet-4-8"]')
-    .click();
-  await page.getByTestId("two-code-sidekick-panel").waitFor({ state: "detached" });
-  await page.getByTestId("two-code-sidekick-model").click();
-  await page.getByRole("combobox", { name: "副手思考档位", exact: true }).click();
-  await page.getByRole("option", { name: "低", exact: true }).click();
-  await page.getByTestId("two-code-sidekick-model").click();
-  await page.getByTestId("two-code-sidekick-panel").waitFor({ state: "detached" });
   await open();
   await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-custom").click();
+  await page.getByRole("combobox", { name: "自定义副手模型", exact: true }).click();
+  await page
+    .locator('[role="option"][data-model-id="claude-sonnet-4-8"][data-model-harness="claude-code"]')
+    .click();
+  await page.getByRole("combobox", { name: "自定义副手思考档位", exact: true }).click();
+  await page.getByRole("option", { name: "低", exact: true }).click();
   await nameAndSave("轻量复核");
   assert.equal((await store.combinations()).items.length, 3);
   checks.push("create-three");
@@ -193,6 +257,9 @@ try {
   await open();
   assert(await page.evaluate(() => document.documentElement.classList.contains("theme-zai-light")));
   await panel.screenshot({ path: `${root}/three-light.png`, animations: "disabled" });
+  await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-custom").click();
+  await panel.screenshot({ path: `${root}/custom-light.png`, animations: "disabled" });
   await page.evaluate(() => localStorage.setItem("zcode-theme", "zai-dark"));
   await page.reload();
   await page.getByTestId("two-code-mode").waitFor();
@@ -249,6 +316,7 @@ try {
   await open();
   assert.equal(await page.getByTestId("two-code-combination-count").innerText(), "10/10");
   await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-save-current").click();
   await page.getByTestId("two-code-combination-name").fill("第十一套");
   await page.getByTestId("two-code-combination-confirm").click();
   await panel
@@ -264,11 +332,36 @@ try {
   await page.getByTestId("two-code-combination-confirm").click();
   await page.getByTestId("two-code-combination-add").waitFor();
   await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-save-current").click();
   assert.equal(await page.getByTestId("two-code-combination-name").inputValue(), "第十一套");
   await page.getByTestId("two-code-combination-confirm").click();
   await row("第十一套").waitFor();
   assert.equal((await store.combinations()).items.length, 10);
   checks.push("delete-and-save-preserved-name");
+  await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-custom").click();
+  await page.getByRole("combobox", { name: "自定义副手模型", exact: true }).click();
+  await page.getByRole("option", { name: "无", exact: true }).click();
+  await page.getByTestId("two-code-combination-name").fill("保留自定义配置");
+  await page.getByTestId("two-code-combination-confirm").click();
+  await panel.getByRole("alert").filter({ hasText: "已保存10套组合" }).waitFor();
+  await panel.getByRole("button", { name: "返回组合列表", exact: true }).click();
+  await manage("组合9", "删除组合");
+  await page.getByTestId("two-code-combination-confirm").click();
+  await page.getByTestId("two-code-combination-add").click();
+  await page.getByTestId("two-code-combination-custom").click();
+  assert.equal(await page.getByTestId("two-code-combination-name").inputValue(), "保留自定义配置");
+  assert.equal(
+    await page.getByRole("combobox", { name: "自定义副手模型", exact: true }).innerText(),
+    "无",
+  );
+  await page.getByTestId("two-code-combination-confirm").click();
+  await row("保留自定义配置").waitFor();
+  assert.equal(
+    (await store.combinations()).items.find((c) => c.name === "保留自定义配置")?.preferences.dual,
+    false,
+  );
+  checks.push("custom-limit-preserves-models-and-name");
   assert.deepEqual(errors, []);
   passed = true;
 } catch (e) {
