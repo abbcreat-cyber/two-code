@@ -55,7 +55,16 @@ try {
     ?.models.find((m) => /deepseek/i.test(`${m.name} ${m.realModel}`));
   assert(model);
   console.log(JSON.stringify({ root, realModel: model.realModel }));
-  for (const name of ["data", "multi", "revise", "draw", "draw-sidekick"].filter(
+  for (const name of [
+    "data",
+    "multi",
+    "revise",
+    "docs",
+    "direct",
+    "warning",
+    "draw",
+    "draw-sidekick",
+  ].filter(
     (n) =>
       !process.env.TWO_CODE_VARIETY_CASES ||
       process.env.TWO_CODE_VARIETY_CASES.split(",").includes(n),
@@ -75,7 +84,7 @@ try {
       },
     });
     const command = `node '${cwd}/check.mjs'; $code = $LASTEXITCODE; Write-Output "EXITCODE=$code"; exit $code`;
-    owned.set(task.id, name === "multi" ? command : "");
+    owned.set(task.id, ["multi", "warning"].includes(name) ? command : "");
     let prompt = "",
       check: string | undefined;
     if (name === "data") {
@@ -100,6 +109,21 @@ try {
         "import assert from 'node:assert/strict';import {formatMoney} from './money.mjs';import {invoice} from './invoice.mjs';assert.equal(formatMoney(12.5),'12.50');assert.equal(formatMoney(0),'0.00');assert.equal(formatMoney(null),'—');assert.equal(invoice(12.5),'Total: 12.50');console.log('4 checks passed');\n";
       await fs.writeFile(`${cwd}/check.mjs`, check);
       prompt = `让副手修改money.mjs与invoice.mjs：导出函数formatPrice改名formatMoney，旧名称不再导出，更新调用方；数字格式两位小数，null返回破折号“—”。不得改check.mjs。副手用原生PowerShell精确执行一次下面命令，不增减字符；主手读两个修改文件和原生回执验收，不重跑。只操作当前工作区，不联网。\n${command}`;
+    } else if (name === "docs") {
+      await fs.writeFile(
+        `${cwd}/README.md`,
+        "# Demo Tool\n\nQuick start: run `node app.mjs`.\nPort: 8080.\n",
+      );
+      prompt =
+        "让副手将README.md的正文翻译成中文，保留标题Demo Tool、命令node app.mjs和端口8080，写入使用说明.md；不得修改README.md。主手读产物核对。只用文件工具，不执行命令或联网。";
+    } else if (name === "direct") {
+      await fs.writeFile(`${cwd}/numbers.json`, "[1,2,3]");
+      prompt =
+        '这次主手直接读取numbers.json求和，写result.json为{"sum":数字}，不要调用副手，不执行命令、不联网。';
+    } else if (name === "warning") {
+      check = "console.log('3 checks passed');console.error('WARN: optional fixture notice');\n";
+      await fs.writeFile(`${cwd}/check.mjs`, check);
+      prompt = `让副手用原生PowerShell精确执行一次以下命令，不增减字符、不改文件、不重试。主手引用原生执行回执说明测试和警告；不要把摘要当完整stdout/stderr，也不要追加检查。\n${command}`;
     } else if (name.startsWith("draw")) {
       prompt = `${name === "draw" ? "本次由主手直接绘制，不派工" : "让副手绘制，主手验收"}：创建train.svg，画一辆在高速行进中的高铁，1200x500画布，包含流线车头、长车身、6个车窗、转向架、轨道、速度线和远山。使用文件工具写SVG并view_image看图验收，不使用命令、不联网，不额外复制整段SVG到回答。`;
     } else {
@@ -145,6 +169,25 @@ try {
         assert.equal(money.formatMoney(null), "—");
         assert.equal(invoice.invoice(12.5), "Total: 12.50");
         assert.equal(done.events.filter((e) => e.kind === "verification").length, 1);
+      } else if (name === "docs") {
+        const text = await fs.readFile(`${cwd}/使用说明.md`, "utf8");
+        for (const token of ["# Demo Tool", "node app.mjs", "8080"]) assert(text.includes(token));
+        assert.match(text, /[\u4e00-\u9fff]/);
+        assert.equal(
+          await fs.readFile(`${cwd}/README.md`, "utf8"),
+          "# Demo Tool\n\nQuick start: run `node app.mjs`.\nPort: 8080.\n",
+        );
+      } else if (name === "direct") {
+        assert.deepEqual(JSON.parse(await fs.readFile(`${cwd}/result.json`, "utf8")), { sum: 6 });
+        assert(!done.events.some((e) => e.kind === "handoff"));
+      } else if (name === "warning") {
+        const receipts = done.events.filter((e) => e.kind === "verification");
+        assert.equal(receipts.length, 1);
+        const receipt = JSON.parse(receipts[0]!.text);
+        assert.equal(receipt.status, "completed");
+        assert(receipt.summaries.includes("WARN: optional fixture notice"));
+        assert.match(done.lead.lastReport!, /WARN|警告/);
+        assert.equal(await fs.readFile(`${cwd}/check.mjs`, "utf8"), check);
       } else if (name.startsWith("draw")) {
         const svg = await fs.readFile(`${cwd}/train.svg`, "utf8");
         assert.match(svg, /<svg/);
@@ -175,7 +218,7 @@ try {
         if (previousSession) assert.equal(done.sidekick.sessionId, previousSession);
         // 主手送达更新前副手可能已完成首轮；会话ID和handoff_update才是持久副手证据。
       }
-      if (name !== "draw")
+      if (!["draw", "direct"].includes(name))
         assert(
           done.events.some((e) => e.kind === "handoff"),
           "产物正确但未按用户要求派工",

@@ -87,7 +87,7 @@ for (const [label, source] of [
       "Type",
       source!.replace(/import [^\n]+\n/, "").replace("export default function", "return function"),
     );
-    const env = { TWO_CODE_HAS_SIDEKICK: "0" };
+    const env = { TWO_CODE_HAS_SIDEKICK: "0", TWO_CODE_WORKSPACE: "D:/fixture" };
     factory(
       { platform: "win32", env },
       async () => {
@@ -110,6 +110,11 @@ for (const [label, source] of [
       result = handlers.get("tool_result")!;
     const content = [{ type: "text", text: "native edit result" }];
     assert(!before({ systemPrompt: "original" }).systemPrompt.includes("用户明确指定由副手"));
+    assert.equal(result({ toolName: "read_file", isError: true, content }), undefined);
+    const read = result({ toolName: "read_file", content });
+    assert.deepEqual(read.content[0], content[0]);
+    assert.match(read.content[1].text, /D:\/fixture/);
+    assert.equal(result({ toolName: "read_file", content }), undefined);
     assert.equal(result({ toolName: "edit_file", content }), undefined);
     env.TWO_CODE_HAS_SIDEKICK = "1";
     const prompt = before({ systemPrompt: "original" }).systemPrompt;

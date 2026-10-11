@@ -30,6 +30,7 @@ for (const [title, file] of [
       ? `${historyRoot}/failure-final.json`
       : "D:/Apps/TwoCode/qa/efficiency-receipts-final-1791699869596/failure-2.json",
   ],
+  ...(process.env.TWO_CODE_WARNING_TASK ? [["警告回执", process.env.TWO_CODE_WARNING_TASK]] : []),
 ]) {
   const original = JSON.parse(await fs.readFile(file!, "utf8"));
   const created = await service.create({
@@ -107,9 +108,11 @@ try {
       body.includes(
         task.title === "成功回执"
           ? "3 checks passed"
-          : historyRoot
-            ? "FAIL: fixture"
-            : "FAIL: intentional fixture",
+          : task.title === "警告回执"
+            ? "WARN: optional fixture notice"
+            : historyRoot
+              ? "FAIL: fixture"
+              : "FAIL: intentional fixture",
       ),
     );
     await row.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });

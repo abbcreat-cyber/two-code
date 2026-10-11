@@ -9,5 +9,5 @@ export function verificationReport(task: TwoCodeTask): string {
   );
   const receipts = all.slice(-8);
   if (!receipts.length) return "";
-  return `原生执行回执（执行器实际返回，非副手自述；本交接${all.length}条${all.length > 8 ? "，仅显示最近8条" : ""}）：\n${receipts.map((e) => e.text).join("\n")}\n回执仅证明对应工具执行结果；仍须按用户要求核对关键产物，已成功且输入未变的测试不重复运行。\n\n`;
+  return `原生执行回执（执行器实际返回，非副手自述；本交接${all.length}条${all.length > 8 ? "，仅显示最近8条" : ""}）：\n${receipts.map((e) => e.text).join("\n")}\n回执仅含筛选摘要，未保留stdout/stderr分流，不能据此声称stderr为空。仍须按用户要求核对关键产物，已成功且输入未变的测试不重复运行。\n\n`;
 }

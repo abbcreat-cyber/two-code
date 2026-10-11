@@ -31,7 +31,7 @@ export function verificationEvent(
       (s) =>
         s.length <= 180 &&
         !/(?:api[_ -]?key|token|secret|password|authorization)\s*[:=]/i.test(s) &&
-        /^(?:\d+\s+(?:tests?|checks?)\s+(?:passed|failed)\b|(?:PASS|FAIL|OK)\b|Tests?:\s|[✔✖ℹ]\s|EXIT(?:CODE)?\s*[:=]|(?:测试|检查|校验).*(?:通过|失败))/i.test(
+        /^(?:\d+\s+(?:tests?|checks?)\s+(?:passed|failed)\b|(?:PASS|FAIL|OK|WARN|WARNING|ERROR)\b|警告|错误|Tests?:\s|[✔✖ℹ]\s|EXIT(?:CODE)?\s*[:=]|(?:测试|检查|校验).*(?:通过|失败))/i.test(
           s,
         ),
     )
@@ -44,6 +44,8 @@ export function verificationEvent(
       status: interrupted ? "interrupted" : isError ? "failed" : "completed",
       ...(exitCode !== undefined ? { reportedExitCode: exitCode } : {}),
       summaries,
+      outputCoverage: "selected-lines",
+      streamSeparation: "unavailable",
     }),
   };
 }

@@ -26,6 +26,18 @@ test("配置目录不能冒充工作区；真实视觉产物和用户明确要�
     /派工尚未执行/,
   );
   assert.doesNotThrow(() => assertHandoffWorkspace(task, "编辑card.svg", "D:/sessions/fixture"));
+  assert.throws(
+    () =>
+      assertHandoffWorkspace(task, "写入D:/sessions/fixture/receipt.json", "D:/sessions/fixture"),
+    /派工尚未执行/,
+  );
+  assert.throws(
+    () => assertHandoffWorkspace(task, '工作目录="D:/sessions/fixture"', "D:/sessions/fixture"),
+    /派工尚未执行/,
+  );
+  assert.doesNotThrow(() =>
+    assertHandoffWorkspace(task, "写D:/sessions/fixture-copy/receipt.json", "D:/sessions/fixture"),
+  );
   assert.doesNotThrow(() =>
     assertHandoffWorkspace(
       task,
@@ -38,6 +50,19 @@ test("配置目录不能冒充工作区；真实视觉产物和用户明确要�
     assertHandoffWorkspace(
       task,
       "检查D:/sessions/fixture/lead/connection/models.json",
+      "D:/sessions/fixture",
+    ),
+  );
+  task.workspacePath = "D:/sessions/fixture/my-work";
+  task.events[0]!.text = "在工作区写receipt.json";
+  assert.throws(
+    () => assertHandoffWorkspace(task, "写D:/sessions/fixture/receipt.json", "D:/sessions/fixture"),
+    /派工尚未执行/,
+  );
+  assert.doesNotThrow(() =>
+    assertHandoffWorkspace(
+      task,
+      "写D:/sessions/fixture/my-work/receipt.json",
       "D:/sessions/fixture",
     ),
   );

@@ -2,6 +2,8 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
+主副手原生工具均提供check_text_encoding，经现有permission裁决，只读最多4MiB普通文件并返回编码/BOM/换行格式；不返回原文、不运行shell，格式事实不能代替业务验收。执行回执保留筛选后的警告行并明确未分离stdout/stderr，不能据缺少行断言stderr为空。用户明确指定的副手执行优先于默认正确性关键工作分工；主手仍负责口径与审查。会话路径守卫覆盖当前任务根目录，保留显式用户授权和原生视觉缓存例外。
+
 tool_input记录原生参数生成进度，与tool（开始调用）、tool_end（原生完成）共享toolCallId。文件草稿预览最多20000字符，参数未完成不能视为执行成功。UI沿用原工具行，副手草稿保留在交接详情；开始派工时合并参数生成行，防止重复卡。流式过程及恢复均由同一事件日志投影，不把未知或中断标为成功。详见tool-input-progress规格。
 
 verification事件保存原生命令工具的有界测试摘要和实际工具返回状态；不解析副手自述当作证据，不保留完整stdout或命令。read_sidekick将本次交接的回执和副手报告分开提供，不能用上一交接成功覆盖当前失败。工具completed不等于需求全部通过，reportedExitCode仅为输出中明确报告的值。见native-verification-receipts规格。

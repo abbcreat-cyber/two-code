@@ -26,6 +26,8 @@ export async function permissionDecision(
   if (
     [
       "read",
+      "check_text_encoding",
+      "mcp__two_code__check_text_encoding",
       "view_image",
       "mcp__two_code__view_image",
       "read_file",

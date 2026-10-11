@@ -14,8 +14,17 @@ test("执行器摘要保留真实退出状态，不把缺少退出码当0，也�
   const data = JSON.parse(event.text);
   assert.equal(data.status, "completed");
   assert.equal(data.reportedExitCode, 0);
+  assert.equal(data.streamSeparation, "unavailable");
   assert.deepEqual(data.summaries, ["3 checks passed", "EXITCODE=0"]);
   assert(!event.text.includes("private"));
+  const warning = verificationEvent(
+    "PowerShell",
+    "w",
+    "3 checks passed\nWARN: optional notice\nWARNING api_key=private",
+    false,
+  )!;
+  assert(JSON.parse(warning.text).summaries.includes("WARN: optional notice"));
+  assert(!warning.text.includes("private"));
   assert.equal(
     JSON.parse(verificationEvent("bash", "b", "FAIL: check\nExit code: 1", true)!.text).status,
     "failed",

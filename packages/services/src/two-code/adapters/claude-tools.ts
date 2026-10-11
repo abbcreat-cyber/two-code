@@ -3,9 +3,20 @@ import { z } from "zod";
 import type { EngineRun } from "../app/ports.js";
 import { handoffToolDescription } from "../domain/handoffs.js";
 import { viewImage, visionDescription } from "./vision.js";
+import { inspectTextFile, textFactsDescription } from "./text-file-facts.js";
 
 export function claudeTools(input: EngineRun) {
   return [
+    tool(
+      "check_text_encoding",
+      textFactsDescription,
+      { path: z.string().min(1) },
+      async ({ path }) => ({
+        content: [
+          { type: "text" as const, text: JSON.stringify(await inspectTextFile(input, path)) },
+        ],
+      }),
+    ),
     tool("view_image", visionDescription, { path: z.string().min(1) }, ({ path }) =>
       viewImage(input, path),
     ),
