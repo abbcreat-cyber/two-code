@@ -24,9 +24,10 @@ export function verificationEvent(
   if (!["powershell", "bash", "run_command", "execute_command"].includes(tool.toLowerCase()))
     return;
   const text = notExecuted ? "" : textOf(result),
-    // Claude原生失败头是“Exit code 7”（无冒号），不能依赖模型补打印EXITCODE才保留退出码。
+    // Claude失败头和Step尾行格式不同；实测Step的Command exited with code被漏掉，
+    // 只匹配独立的原生状态行，不能要求模型追加打印EXITCODE来补证。
     match =
-      /(?:^|\n)[ \t]*(?:EXIT(?:CODE)?[ \t]*[:=][ \t]*|Exit code(?:[ \t]*[:=][ \t]*|[ \t]+))(-?\d+)[ \t]*(?:\r?$|\r?\n)/i.exec(
+      /(?:^|\n)[ \t]*(?:EXIT(?:CODE)?[ \t]*[:=][ \t]*|Exit code(?:[ \t]*[:=][ \t]*|[ \t]+)|Command exited with code[ \t]+)(-?\d+)[ \t]*(?:\r?$|\r?\n)/i.exec(
         text,
       );
   const exitCode = match ? Number(match[1]) : undefined;

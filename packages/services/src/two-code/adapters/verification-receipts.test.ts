@@ -14,6 +14,7 @@ test("原生无冒号Exit code回执保留退出码，不靠模型额外打印EX
     "Exit code: 7\r\nFAIL: fixture",
     "EXITCODE=7",
     "EXIT: 7",
+    "Command exited with code 7",
   ]) {
     assert.equal(
       JSON.parse(verificationEvent("PowerShell", "native", text, true)!.text).reportedExitCode,
@@ -31,6 +32,9 @@ test("原生无冒号Exit code回执保留退出码，不靠模型额外打印EX
     "Exit code 7 trailing",
     "Exit code\n7",
     "Exit code 999999999999999999999",
+    "echo Command exited with code 7",
+    "The command exited with code 7",
+    "Command exited with code 7 trailing",
   ]) {
     assert.equal(
       JSON.parse(verificationEvent("PowerShell", "native", text, true)!.text).reportedExitCode,
