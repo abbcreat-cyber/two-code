@@ -87,8 +87,9 @@ for (const [label, source] of [
       "Type",
       source!.replace(/import [^\n]+\n/, "").replace("export default function", "return function"),
     );
+    const env = { TWO_CODE_HAS_SIDEKICK: "0" };
     factory(
-      { platform: "win32", env: { TWO_CODE_HAS_SIDEKICK: "0" } },
+      { platform: "win32", env },
       async () => {
         throw Error("offline");
       },
@@ -105,5 +106,22 @@ for (const [label, source] of [
       (await handlers.get("tool_call")!({ toolName: "subagent", input: {} })).block,
       true,
     );
+    const before = handlers.get("before_agent_start")!,
+      result = handlers.get("tool_result")!;
+    const content = [{ type: "text", text: "native edit result" }];
+    assert(!before({ systemPrompt: "original" }).systemPrompt.includes("用户明确指定由副手"));
+    assert.equal(result({ toolName: "edit_file", content }), undefined);
+    env.TWO_CODE_HAS_SIDEKICK = "1";
+    const prompt = before({ systemPrompt: "original" }).systemPrompt;
+    assert(prompt.startsWith("original"));
+    assert.match(prompt, /调用写入\/修改\/执行工具之前先用sidekick派工/);
+    assert.equal(result({ toolName: "edit_file", isError: true, content }), undefined);
+    const successful = result({ toolName: "edit_file", content });
+    assert.deepEqual(successful.content[0], content[0]);
+    assert.match(successful.content[1].text, /已实际完成/);
+    assert.match(successful.content[1].text, /如实说明实际执行者/);
+    assert.equal(result({ toolName: "edit_file", content }), undefined);
+    before({ systemPrompt: "original" });
+    assert(result({ toolName: "edit_file", content }));
   });
 }

@@ -187,11 +187,12 @@ export default function(pi) {
     return true;
   };
   pi.on('session_start', nativePowerShell);
-  pi.on('before_agent_start', (event) => { editReminder = false; const ps = nativePowerShell(); return {systemPrompt:event.systemPrompt+'\\n工作区事实（执行器提供）：'+JSON.stringify(process.env.TWO_CODE_WORKSPACE)+ '。配置目录、agent目录、session目录不是工作目录。当前文件直接用相对路径，交接同样沿用相对路径；禁止为确认这些已知事实再搜索目录。'+(ps?'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。':'')}; });
+  // 用户指定分工必须在动作前提醒；完成后才催派工曾触发主手回滚正确修改再让副手重做。
+  pi.on('before_agent_start', (event) => { editReminder = false; const ps = nativePowerShell(); return {systemPrompt:event.systemPrompt+'\\n工作区事实（执行器提供）：'+JSON.stringify(process.env.TWO_CODE_WORKSPACE)+ '。配置目录、agent目录、session目录不是工作目录。当前文件直接用相对路径，交接同样沿用相对路径；禁止为确认这些已知事实再搜索目录。'+(process.env.TWO_CODE_HAS_SIDEKICK === '1'?'\\n用户明确指定由副手修改文件或执行命令时，必须在主手调用写入/修改/执行工具之前先用sidekick派工；主手只做用户分配的检查，不能因修改很小而替副手先做。':'')+(ps?'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。':'')}; });
   pi.on('tool_result', event => {
     if (process.env.TWO_CODE_HAS_SIDEKICK !== '1' || editReminder || event.isError || !['write','edit','write_file','edit_file'].includes(event.toolName)) return;
     editReminder = true;
-    return {content:[...(event.content ?? []),{type:'text',text:'协作提醒：实现和验证默认交给唯一副手；仅1–2轮即可完成并确认的微小修改、正确性关键工作和需亲自判断的渲染工作由主手实施。明确用户分工优先；不要为本提醒重做已完成的修改。'}]};
+    return {content:[...(event.content ?? []),{type:'text',text:'执行事实：这次文件修改已实际完成。保留已有正确产物，不得仅为了补分工而撤销再让副手重做同一修改；如分工有偏差，应如实说明实际执行者，再安排尚未完成的工作。产物有错或用户明确要求撤销/重做时，仍按要求处理。'}]};
   });
   pi.on('tool_call', async (event) => {
     if (process.env.TWO_CODE_ACTOR_ROLE === 'sidekick' && forbidden(event.toolName)) return {block:true,reason:'[two-code-permission-denied] 此动作属于主手权限，副手应报告需求而非调用'};

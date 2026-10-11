@@ -15,11 +15,18 @@ export function handoffHistory(task: TwoCodeTask, offset = 0): string {
   if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("交接历史位置无效");
   const text = JSON.stringify(
     task.events
-      .filter((e) => ["handoff", "handoff_update", "handoff_report"].includes(e.kind))
+      // 连续任务回读也必须保留原生证据；仅模型报告会让已验证结果退化为口述。
+      .filter(
+        (e) =>
+          ["handoff", "handoff_update", "handoff_report"].includes(e.kind) ||
+          (e.role === "sidekick" && e.kind === "verification"),
+      )
       .map((e) => ({
         seq: e.seq,
         at: e.at,
         kind: e.kind,
+        role: e.role,
+        toolCallId: e.toolCallId,
         text: e.text,
         userRequirements: e.handoffUserSeq
           ? task.events.find((user) => user.seq === e.handoffUserSeq && user.role === "user")?.text

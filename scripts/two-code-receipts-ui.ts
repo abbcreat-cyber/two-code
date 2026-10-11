@@ -16,9 +16,20 @@ const services = createLocalServices({
   }),
   service = services.get(ITwoCodeService);
 const prepared = [];
+const historyRoot = process.env.TWO_CODE_RECEIPTS_HISTORY_ROOT;
 for (const [title, file] of [
-  ["成功回执", "D:/Apps/TwoCode/qa/efficiency-receipts-candidate-1791699649372/repair-1.json"],
-  ["失败回执", "D:/Apps/TwoCode/qa/efficiency-receipts-final-1791699869596/failure-2.json"],
+  [
+    "成功回执",
+    historyRoot
+      ? `${historyRoot}/success-final.json`
+      : "D:/Apps/TwoCode/qa/efficiency-receipts-candidate-1791699649372/repair-1.json",
+  ],
+  [
+    "失败回执",
+    historyRoot
+      ? `${historyRoot}/failure-final.json`
+      : "D:/Apps/TwoCode/qa/efficiency-receipts-final-1791699869596/failure-2.json",
+  ],
 ]) {
   const original = JSON.parse(await fs.readFile(file!, "utf8"));
   const created = await service.create({
@@ -52,7 +63,7 @@ const env = {
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({
-  executablePath: "D:/Apps/TwoCode/releases/0.8.8/win-unpacked/Two Code.exe",
+  executablePath: `${process.env.TWO_CODE_RELEASE_DIR || "D:/Apps/TwoCode/releases/0.8.9"}/win-unpacked/Two Code.exe`,
   args: ["--disable-gpu"],
   env,
   timeout: 60000,
@@ -90,15 +101,18 @@ try {
       .getByText(/原生执行回执/)
       .first()
       .waitFor();
-    const body = await page.locator("body").innerText();
+    const body = await row.innerText();
+    assert(body.includes("原生执行回执"), "回执必须位于原版副手工具详情内");
     assert(
-      body.includes(task.title === "成功回执" ? "3 checks passed" : "FAIL: intentional fixture"),
+      body.includes(
+        task.title === "成功回执"
+          ? "3 checks passed"
+          : historyRoot
+            ? "FAIL: fixture"
+            : "FAIL: intentional fixture",
+      ),
     );
-    await page
-      .getByText(/原生执行回执/)
-      .first()
-      .scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });
+    await row.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });
     results.push({ title: task.title, passed: true });
   }
   assert.deepEqual(errors, []);
