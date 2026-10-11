@@ -1,6 +1,6 @@
 {
   "name": "@zcode/desktop",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "private": true,
   "description": "Two Code multi-harness workspace, based on ZCode",
   "author": "ZCode",
@@ -41,6 +41,7 @@
     "@opentelemetry/resources": "2.6.1",
     "@opentelemetry/sdk-metrics": "2.6.1",
     "@opentelemetry/sdk-trace-base": "2.6.1",
+    "@resvg/resvg-js": "2.6.2",
     "@zcode/client": "workspace:*",
     "@zcode/provider": "workspace:*",
     "@zcode/provider-node": "workspace:*",

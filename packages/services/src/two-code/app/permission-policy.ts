@@ -26,6 +26,8 @@ export async function permissionDecision(
   if (
     [
       "read",
+      "view_image",
+      "mcp__two_code__view_image",
       "read_file",
       "list_directory",
       "find_files",

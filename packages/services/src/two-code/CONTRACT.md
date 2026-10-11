@@ -2,6 +2,8 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
+importImage将有界图片保存为Host持久附件，UI草稿仅保存引用及缩略图，发送复用原submit。两角色的view_image返回原生图像内容块；SVG由Host内置渲染，不依赖外部命令。模型image能力沿用原配置。Claude本机Messages网关的工具图片在本轮私有转发器中提升到同消息顶层image，保持工具配对，不改共享网关。详见specs/two-code/vision.md。
+
 终态在适配器关闭、持久化和租约释放后广播，完成事件可立即接受续问；进入终态提交后的停止只等待提交，不倒改结果。TaskEvent可选toolCallId/notExecuted保存原生开场及权限门禁的明确未执行回执；普通工具失败和中断不代表未执行，旧事件无此字段仍可读取。
 
 Step主手移植阶跃星辰1.0.10的提前开场流：原生同模型、无工具、有界短请求后沿用原档位主请求，一轮最多一次。两角色共享单一定义的沟通规则，副手不增加开场请求。来源、豁免、取消与验收见specs/two-code/opening-communication.md。

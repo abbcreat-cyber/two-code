@@ -1,5 +1,6 @@
 import type { Event } from "@zcode/rpc";
 import type { TwoCodeModelSettingsApi } from "./settings-contract.js";
+import type { TwoCodeImagesApi } from "./image-contract.js";
 export {
   modelThinkingProfiles,
   selectionThinkingProfile,
@@ -116,7 +117,7 @@ export interface CreateTwoCodeTask {
   sidekick: EngineSelection;
 }
 export type TwoCodePreferences = Pick<CreateTwoCodeTask, "dual" | "lead" | "sidekick" | "mode">;
-export interface ITwoCodeService extends TwoCodeModelSettingsApi {
+export interface ITwoCodeService extends TwoCodeModelSettingsApi, TwoCodeImagesApi {
   catalog(): Promise<HarnessInfo[]>;
   list(workspacePath: string): Promise<TwoCodeTask[]>;
   create(input: CreateTwoCodeTask): Promise<TwoCodeTask>;
@@ -132,7 +133,13 @@ export interface ITwoCodeService extends TwoCodeModelSettingsApi {
 }
 export type ITwoCodeExecutionService = Omit<
   ITwoCodeService,
-  "modelSettings" | "saveConnection" | "removeConnection" | "testConnection" | "onDidCatalogChange"
+  | "modelSettings"
+  | "saveConnection"
+  | "removeConnection"
+  | "testConnection"
+  | "onDidCatalogChange"
+  | "importImage"
+  | "readImage"
 >;
 export const ITwoCodeService: { readonly channelName: string; readonly _brand?: ITwoCodeService } =
   { channelName: "two-code" };

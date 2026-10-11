@@ -14,6 +14,7 @@ import { claudeExecutable, piEntry, stepExecutable } from "./paths.js";
 import { TaskLease } from "./task-lease.js";
 import { JsonPreferences } from "./preferences.js";
 import { TwoCodeConnections } from "./connections.js";
+import { storeImage, readStoredImage } from "./vision.js";
 
 export function createTwoCodeService(
   agent: IZCodeAgentService,
@@ -83,6 +84,8 @@ export function createTwoCodeService(
             : new ZCodeAdapter(agent, sessions),
   });
   const service: ITwoCodeService = Object.assign(coordinator, {
+    readImage: (path: string) => readStoredImage(root, path),
+    importImage: (input: Parameters<ITwoCodeService["importImage"]>[0]) => storeImage(root, input),
     modelSettings: () => connections.read(),
     saveConnection: (input: Parameters<ITwoCodeService["saveConnection"]>[0]) =>
       connections.save(input),

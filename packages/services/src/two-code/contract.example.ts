@@ -1,6 +1,12 @@
 import type { ITwoCodeService } from "./contract.js";
 import { normalizeThinkingSelection } from "./contract.js";
 
+export const uploadImage = (service: ITwoCodeService, fileName: string, dataBase64: string) =>
+  service.importImage({ fileName, dataBase64 });
+
+export const previewUploadedImage = (service: ITwoCodeService, path: string) =>
+  service.readImage(path);
+
 export const explicitAstraThinking = normalizeThinkingSelection({
   harness: "pi",
   model: "gpt-6-astra",

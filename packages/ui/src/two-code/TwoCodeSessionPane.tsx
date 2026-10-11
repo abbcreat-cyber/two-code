@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Square, ArrowUp } from "lucide-react";
 import { twoCodeSessionId, twoCodeTaskId } from "@zcode/services";
 import { useTwoCode } from "@/hooks/useTwoCode.js";
@@ -17,6 +17,7 @@ import { TwoCodeModelControls } from "./TwoCodeModelControls.js";
 import { SessionStatisticsBar } from "@/v4/composer/SessionStatisticsBar.js";
 import { projectTwoCodeUsage } from "./usageProjection.js";
 import { useSettings } from "@/hooks/useSettingService.js";
+import { useTwoCodeImages } from "@/hooks/useTwoCodeImages.js";
 
 export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => void }) {
   const id = twoCodeTaskId(props.sessionId);
@@ -34,6 +35,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     busy = task?.status === "running";
   const visibleError = state.error || (task?.status !== "cancelled" ? task?.error : undefined);
   const draftKey = `two-code:composer:${props.workspaceIdentity || props.workspacePath}:${props.sessionId ?? "draft"}`;
+  const images = useTwoCodeImages(draftKey, state.importImage);
   const [sending, setSending] = useState(false),
     [text, setText] = useState(() => localStorage.getItem(draftKey) ?? "");
   const input = useRef<LexicalChatInputHandle | null>(null);
@@ -52,6 +54,18 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
   const rows = useMemo(() => projectTwoCodeRows(task), [task]);
   const { settings } = useSettings();
   const showReasoning = settings?.messageStreamShowReasoning ?? true;
+  const readAttachment = useCallback(
+    async ({ ref, signal }: { ref: string; signal?: AbortSignal }) => {
+      signal?.throwIfAborted();
+      const image = await state.readImage(ref);
+      signal?.throwIfAborted();
+      return {
+        bytes: Uint8Array.from(atob(image.dataBase64), (c) => c.charCodeAt(0)),
+        mediaType: image.mime,
+      };
+    },
+    [state.readImage],
+  );
   const context = useMemo(
     () => ({
       workspacePath: props.workspacePath,
@@ -59,6 +73,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
       theme,
       codePreviewSettings,
       sessionId: props.sessionId,
+      readAttachment,
       messageStreamShowReasoning: showReasoning,
       onOpenFileLink: props.onOpenFileLink,
       onOpenBrowserUrl: props.onOpenBrowserUrl,
@@ -76,15 +91,25 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
       codePreviewSettings,
       task?.permissions.length,
       showReasoning,
+      readAttachment,
     ],
   );
   const send = (value: string) => {
-    if (sending || state.loading || state.configuring || !value.trim()) return false;
+    if (
+      sending ||
+      images.busy ||
+      state.loading ||
+      state.configuring ||
+      (!value.trim() && !images.items.length)
+    )
+      return false;
+    const sentImages = images.items;
     setSending(true);
     void state
-      .submit(value)
+      .submit(images.compose(value), value)
       .then((submittedId) => {
         if (!submittedId) return;
+        images.clear(sentImages);
         const submittedKey = `two-code:composer:${props.workspaceIdentity || props.workspacePath}:${twoCodeSessionId(submittedId)}`;
         const keys = [draftKey, submittedKey];
         for (const key of keys)
@@ -111,6 +136,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
   const dock = (
     // 原生Timeline已经限定底部输入列宽度；这里不能再次缩窄，否则与消息列错位。
     <div className="chat-composer-region z-20 w-full shrink-0 @container/composer">
+      {images.input}
       {permission && task && (
         <div data-testid="two-code-permission" data-tool={permission.title}>
           <PermissionDialog
@@ -166,8 +192,27 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           inputTestId="two-code-composer"
           submitTestId="two-code-send"
           submitLabel="发送"
+          topContent={images.chips}
+          attachmentAction={{
+            label: "添加图片",
+            onSelect: images.open,
+            testId: "two-code-add-image",
+          }}
+          onPaste={images.paste}
+          enableExternalFileDrop
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+          }}
+          onDrop={images.drop}
+          allowSubmitWhenEmpty={images.items.length > 0}
           submitting={sending}
-          submitDisabled={state.loading || state.configuring || sending || !text.trim()}
+          submitDisabled={
+            state.loading ||
+            state.configuring ||
+            sending ||
+            images.busy ||
+            (!text.trim() && !images.items.length)
+          }
           enableMentionPanel={false}
           onChange={(value) => {
             setText(value);
@@ -189,13 +234,13 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           submitControl={
             busy ? (
               <div className="flex items-center gap-1">
-                {text.trim() && (
+                {(text.trim() || images.items.length > 0) && (
                   <Button
                     aria-label="发送补充"
                     title="发送补充"
                     data-testid="two-code-send"
                     size="icon-sm"
-                    disabled={sending || state.loading || state.configuring}
+                    disabled={sending || images.busy || state.loading || state.configuring}
                     onClick={() => send(input.current?.getMarkdown() ?? text)}
                   >
                     <ArrowUp size={14} />

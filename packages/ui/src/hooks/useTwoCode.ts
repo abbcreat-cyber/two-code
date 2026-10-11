@@ -20,6 +20,13 @@ export function useTwoCode(
 ) {
   const service = useWorkspaceServices(workspacePath).twoCodeService;
   const nativeModels = useModelSelectionView(workspacePath);
+  const readImage = useCallback(
+    async (path: string) => {
+      if (!service) throw Error("图片服务不可用");
+      return service.readImage(path);
+    },
+    [service],
+  );
   const draftPreferenceKey = `two-code:draft-preferences:${workspacePath}`;
   const [catalog, setCatalog] = useState<HarnessInfo[]>([]);
   const [preferences, setPreferences] = useState<TwoCodePreferences>(initial);
@@ -125,7 +132,7 @@ export function useTwoCode(
       disposed = true;
     };
   }, [activeId, service, draftPreferenceKey]);
-  const submit = async (text: string) => {
+  const submit = async (text: string, draftText = text) => {
     if (!service || sendingRef.current) return;
     sendingRef.current = true;
     setCommandError(activeId);
@@ -135,7 +142,7 @@ export function useTwoCode(
         const task = await service.create({ ...preferences, workspacePath });
         id = task.id;
         clearSubmittedDraftPreferences(localStorage, draftPreferenceKey, preferences);
-        onCreated?.(id, text);
+        onCreated?.(id, draftText);
         upsert(task);
       }
       setCommandError(id);
@@ -198,6 +205,8 @@ export function useTwoCode(
     configuring: configuring || defaultsLoading,
     error: commandErrors[commandKey(activeId)] || error,
     submit,
+    readImage,
+    importImage: service ? service.importImage.bind(service) : undefined,
     cancel,
     respond,
     saveDefaults: async (value: TwoCodePreferences) => {

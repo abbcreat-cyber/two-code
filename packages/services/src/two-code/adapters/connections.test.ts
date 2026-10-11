@@ -21,6 +21,32 @@ async function fixture() {
   const root = await mkdtemp("D:/Apps/TwoCode/qa/unit-state/connections-");
   return { root, manager: new TwoCodeConnections(root, async () => [structuredClone(native)]) };
 }
+
+test("未编辑过的Claude本机API连接也冻结到适配器，图片转换不能被原生直通绕过", async () => {
+  const root = await mkdtemp("D:/Apps/TwoCode/qa/unit-state/claude-native-");
+  const manager = new TwoCodeConnections(root, async () => [
+    {
+      ...native,
+      id: "native:claude-code",
+      harness: "claude-code",
+      provider: "",
+      api: "anthropic-messages",
+      baseUrl: "http://127.0.0.1:43153",
+    },
+  ]);
+  const task = newTask(
+    "task",
+    {
+      workspacePath: root,
+      dual: false,
+      lead: { harness: "claude-code", model: "model-a" },
+      sidekick: { harness: "pi" },
+    },
+    "now",
+  );
+  assert.equal((await manager.freeze(task)).lead?.baseUrl, "http://127.0.0.1:43153");
+  assert(!JSON.stringify(await manager.read()).includes("private-native-key"));
+});
 test("managed overrides keep keys private, preserve native config, and freeze execution settings", async () => {
   const { root, manager } = await fixture();
   const before = await manager.read();

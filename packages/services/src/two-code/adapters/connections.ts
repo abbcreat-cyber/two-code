@@ -230,6 +230,7 @@ export class TwoCodeConnections {
     if (
       !c.subscription &&
       c.harness !== "step-code" &&
+      !(c.harness === "claude-code" && c.baseUrl) &&
       !state.connections.some((saved) => saved.id === c.id) &&
       !(c.harness === "pi" && c.models.some((m) => findModelThinkingProfile(m.id, m.name)))
     )

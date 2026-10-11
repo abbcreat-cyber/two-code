@@ -3,8 +3,14 @@ import { randomBytes } from "node:crypto";
 import type { EngineRun } from "../app/ports.js";
 import { handoffToolDescription, sidekickForbiddenTool } from "../domain/handoffs.js";
 import { permissionDenied } from "./permission-feedback.js";
+import { viewImage, visionDescription } from "./vision.js";
 
 const definitions = [
+  {
+    name: "view_image",
+    description: visionDescription,
+    inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+  },
   {
     name: "sidekick",
     description: handoffToolDescription,
@@ -62,7 +68,10 @@ export class ToolBridge {
         id = data.id;
         let result: unknown;
         if (request.url === "/tool")
-          result = { text: await this.invoke(data.name, data.arguments ?? {}) };
+          result =
+            data.name === "view_image"
+              ? await viewImage(this.input, data.arguments?.path)
+              : { text: await this.invoke(data.name, data.arguments ?? {}) };
         else if (request.url !== "/mcp") {
           response.writeHead(404).end();
           return;
@@ -79,21 +88,26 @@ export class ToolBridge {
         else if (data.method === "tools/list")
           result = {
             tools: definitions.filter((d) =>
-              d.name === "read_handoff_history"
-                ? !!this.input.readHandoffHistory
-                : !!this.input.handoff,
+              d.name === "view_image"
+                ? true
+                : d.name === "read_handoff_history"
+                  ? !!this.input.readHandoffHistory
+                  : !!this.input.handoff,
             ),
           };
         else if (data.method === "tools/call") {
           try {
-            result = {
-              content: [
-                {
-                  type: "text",
-                  text: await this.invoke(data.params.name, data.params.arguments ?? {}),
-                },
-              ],
-            };
+            result =
+              data.params.name === "view_image"
+                ? await viewImage(this.input, data.params.arguments?.path)
+                : {
+                    content: [
+                      {
+                        type: "text",
+                        text: await this.invoke(data.params.name, data.params.arguments ?? {}),
+                      },
+                    ],
+                  };
           } catch (error) {
             result = { isError: true, content: [{ type: "text", text: String(error) }] };
           }
@@ -180,7 +194,7 @@ export default function(pi) {
   });
   pi.on('tool_call', async (event) => {
     if (process.env.TWO_CODE_ACTOR_ROLE === 'sidekick' && forbidden(event.toolName)) return {block:true,reason:'[two-code-permission-denied] 此动作属于主手权限，副手应报告需求而非调用'};
-    if (event.toolName === 'read_handoff_history') return;
+    if (['read_handoff_history','view_image'].includes(event.toolName)) return;
     if (['sidekick','read_sidekick'].includes(event.toolName)) return;
     if (['subagent','agent_send','workflow'].includes(event.toolName)) return {block:true,reason:'[two-code-permission-denied] 请使用Two Code管理的持久副手，不允许递归委派'};
     try {
@@ -192,8 +206,9 @@ export default function(pi) {
   const call = async (name, args, signal) => {
     const r = await fetch(process.env.TWO_CODE_TOOL_URL, { method:'POST', signal, headers:{'content-type':'application/json', authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN}, body:JSON.stringify({name, arguments:args}) });
     const result = await r.json(); if(!r.ok) throw Error(result.error || '派工失败');
-    return { content:[{type:'text',text:result.text}], details:{} };
+    return { content:result.content ?? [{type:'text',text:result.text}], details:{} };
   };
+  pi.registerTool({name:'view_image',label:'查看图片',description:${JSON.stringify("查看本地PNG/JPEG/WebP/GIF/SVG的真实像素。SVG自动内置渲染，无需系统命令或浏览器。视觉验收请直接使用此工具。")},parameters:Type.Object({path:Type.String()}),execute:(id,args,signal)=>call('view_image',args,signal)});
   if (process.env.TWO_CODE_HAS_HISTORY === '1') pi.registerTool({name:'read_handoff_history',label:'交接历史',description:'读取本任务逐字交接历史，按nextOffset翻页；压缩后按需恢复确切原文。',parameters:Type.Object({offset:Type.Optional(Type.Integer({minimum:0}))}),execute:(id,args,signal)=>call('read_handoff_history',args,signal)});
   if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
   pi.registerTool({name:'sidekick',label:'副手',description:${JSON.stringify(handoffToolDescription)},parameters:Type.Object({message:Type.String(),block:Type.Optional(Type.Boolean())}),execute:(id,args,signal)=>call('sidekick',args,signal)});

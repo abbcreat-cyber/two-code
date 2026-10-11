@@ -15,6 +15,8 @@ import { claudeExecutable } from "./paths.js";
 import { handoffToolDescription } from "../domain/handoffs.js";
 import { InputStream } from "./input-stream.js";
 import { permissionDenied } from "./permission-feedback.js";
+import { viewImage, visionDescription } from "./vision.js";
+import { claudeConnection } from "./claude-connection.js";
 
 export class ClaudeAdapter implements HarnessAdapter {
   private active?: Query;
@@ -60,6 +62,9 @@ export class ClaudeAdapter implements HarnessAdapter {
     });
     await input.emit({ kind: "session", text: sessionId });
     const tools = [
+      tool("view_image", visionDescription, { path: z.string().min(1) }, ({ path }) =>
+        viewImage(input, path),
+      ),
       ...(input.handoff
         ? [
             tool(
@@ -94,20 +99,11 @@ export class ClaudeAdapter implements HarnessAdapter {
       ? (input.selection.thinking as Options["effort"])
       : undefined;
     let text = "";
-    const connectionEnv = input.connection?.baseUrl
-      ? {
-          ANTHROPIC_BASE_URL: input.connection.baseUrl,
-          ANTHROPIC_API_KEY: input.connection.authMode === "token" ? "" : input.connection.apiKey,
-          ANTHROPIC_AUTH_TOKEN:
-            input.connection.authMode === "token" ? input.connection.apiKey : "",
-          ...Object.fromEntries(
-            Object.entries(input.connection.modelAliases ?? {}).map(([alias, model]) => [
-              `ANTHROPIC_DEFAULT_${alias.toUpperCase()}_MODEL`,
-              model,
-            ]),
-          ),
-        }
-      : undefined;
+    const connection = await claudeConnection(
+        input.connection,
+        join(input.sessionDir, "visual-transport.json"),
+      ),
+      connectionEnv = connection.env;
     const partialUsage = new Map<
       string,
       {
@@ -310,6 +306,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       this.inbox.finish();
       await this.stopping;
       this.active?.close();
+      await connection.close();
       this.active = undefined;
       this.child = undefined;
     }

@@ -1,5 +1,6 @@
 import type { TwoCodeTask } from "@zcode/services";
 import type { ConversationRow, ToolCallRow, TurnHeaderRow } from "@zcode/shared/zcode-protocol-v4";
+import { projectImageMessage } from "./imageMessage.js";
 
 /** 仅作展示投影：复用原生行和滚动/Markdown渲染，不复制执行状态。 */
 export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
@@ -62,7 +63,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
           rowId: rowId + 1,
           kind: "userInput",
           origin: "realUser",
-          text: event.text,
+          ...projectImageMessage(event.text),
         });
         message = undefined;
         continue;
@@ -91,7 +92,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
         rowId: rowId + 1,
         kind: "userInput",
         origin: "realUser",
-        text: event.text,
+        ...projectImageMessage(event.text),
       });
       message = undefined;
       handoff = undefined;

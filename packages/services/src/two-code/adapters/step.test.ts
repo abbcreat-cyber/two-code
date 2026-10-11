@@ -71,6 +71,7 @@ for (const [label, source] of [
     let active = ["run_command"];
     const pi = {
       registerCommand() {},
+      registerTool() {},
       on(name: string, fn: (...args: any[]) => any) {
         handlers.set(name, fn);
       },
@@ -83,11 +84,16 @@ for (const [label, source] of [
     const factory = new Function(
       "process",
       "fetch",
+      "Type",
       source!.replace(/import [^\n]+\n/, "").replace("export default function", "return function"),
     );
-    factory({ platform: "win32", env: { TWO_CODE_HAS_SIDEKICK: "0" } }, async () => {
-      throw Error("offline");
-    })(pi);
+    factory(
+      { platform: "win32", env: { TWO_CODE_HAS_SIDEKICK: "0" } },
+      async () => {
+        throw Error("offline");
+      },
+      { Object: (v: unknown) => v, String: () => ({ type: "string" }) },
+    )(pi);
     handlers.get("session_start")!();
     assert.deepEqual(active, ["run_command", "powershell"]);
     assert.equal(
