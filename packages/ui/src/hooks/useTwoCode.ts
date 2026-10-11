@@ -46,6 +46,8 @@ export function useTwoCode(
     }));
   };
   const sendingRef = useRef(false);
+  const forkingRef = useRef(false);
+  const pendingFork = useRef<{ taskId: string; atSeq: number; requestId: string } | null>(null);
   const pendingRequest = useRef<{ taskId: string; text: string; requestId: string } | null>(null);
   const upsert = useCallback(
     (task: TwoCodeTask) =>
@@ -209,6 +211,29 @@ export function useTwoCode(
     importImage: service ? service.importImage.bind(service) : undefined,
     cancel,
     respond,
+    fork: async (atSeq: number) => {
+      if (!service || !activeId || configuring || forkingRef.current) return;
+      forkingRef.current = true;
+      setConfiguring(true);
+      try {
+        const previous = pendingFork.current;
+        const request =
+          previous?.taskId === activeId && previous.atSeq === atSeq
+            ? previous
+            : { taskId: activeId, atSeq, requestId: crypto.randomUUID() };
+        pendingFork.current = request;
+        const branch = await service.fork(request);
+        pendingFork.current = null;
+        upsert(branch);
+        setCommandError(activeId);
+        return branch.id;
+      } catch (cause) {
+        setCommandError(activeId, cause);
+      } finally {
+        forkingRef.current = false;
+        setConfiguring(false);
+      }
+    },
     saveDefaults: async (value: TwoCodePreferences) => {
       if (!service) throw new Error("当前宿主未启用 Two Code 服务");
       // 默认配置由服务拥有，不回填可能已切换到别处的当前草稿。

@@ -22,24 +22,34 @@ import { assertHandoffWorkspace } from "../domain/handoff-workspace.js";
 import { handoff, readSidekick, wakeChannel } from "./sidekick-handoff.js";
 import { steerRun } from "./steering.js";
 import { readDefaults, writeDefaults } from "./default-preferences.js";
-import {
-  appendEvent,
-  leadInstruction,
-  newTask,
-  reconfigureTask,
-  sidekickInstruction,
-} from "../domain/task.js";
+import { createTaskMutations } from "./task-mutations.js";
+import { appendEvent, leadInstruction, newTask, sidekickInstruction } from "../domain/task.js";
 const copy = (task: TwoCodeTask): TwoCodeTask => structuredClone(task);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   private readonly tasks = new Map<string, TwoCodeTask>();
   private readonly active = new Map<string, ActiveRun>();
   private readonly configuring = new Set<string>();
+  private readonly mutations: ReturnType<typeof createTaskMutations>;
   private readonly changes = new Emitter<TwoCodeTask>();
   private readonly ready: Promise<void>;
   readonly onDidChange = this.changes.event;
   constructor(private readonly deps: CoordinatorDependencies) {
     this.ready = this.restore();
+    this.mutations = createTaskMutations(deps, {
+      ready: () => this.ready,
+      busy: (id) => this.active.has(id) || this.configuring.has(id),
+      lock: (id, value) => {
+        if (value) this.configuring.add(id);
+        else this.configuring.delete(id);
+      },
+      read: (id) => this.task(id, true),
+      cached: (id) => this.tasks.get(id),
+      publish: (task) => {
+        this.tasks.set(task.id, task);
+        this.changes.fire(copy(task));
+      },
+    });
   }
   private async restore(): Promise<void> {
     for (const saved of await this.deps.store.load()) {
@@ -107,30 +117,8 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     return copy(task);
   }
   read = async (id: string) => copy(await this.task(id));
-  async configure(input: {
-    taskId: string;
-    preferences: TwoCodePreferences;
-  }): Promise<TwoCodeTask> {
-    await this.ready;
-    const id = input.taskId;
-    const preferences = parsePreferences(input.preferences);
-    if (this.active.has(id) || this.configuring.has(id))
-      throw new Error("任务执行或配置保存中，请稍后更换");
-    this.configuring.add(id);
-    let release: (() => Promise<void>) | undefined;
-    try {
-      release = await this.deps.lease?.acquire(id);
-      const task = await this.task(id, true);
-      const next = reconfigureTask(task, preferences);
-      await this.deps.store.save(next);
-      this.tasks.set(id, next);
-      this.changes.fire(copy(next));
-      return copy(next);
-    } finally {
-      await release?.();
-      this.configuring.delete(id);
-    }
-  }
+  fork: ITwoCodeExecutionService["fork"] = (input) => this.mutations.fork(input);
+  configure: ITwoCodeExecutionService["configure"] = (input) => this.mutations.configure(input);
   async submit(input: { taskId: string; requestId: string; text: string }): Promise<TwoCodeTask> {
     const task = await this.task(input.taskId);
     if (this.configuring.has(task.id)) throw new Error("模型配置保存中，请稍后发送");

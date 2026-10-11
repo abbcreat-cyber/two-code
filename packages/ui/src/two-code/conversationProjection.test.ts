@@ -17,6 +17,23 @@ const base: TwoCodeTask = {
   events: [],
 };
 
+test("叉子只挂到已成功整轮的最终回答，取消轮不出现伪分叉点", () => {
+  const task = structuredClone(base);
+  task.status = "cancelled";
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "first" },
+    { seq: 2, at: task.updatedAt, role: "lead", kind: "message", text: "done" },
+    { seq: 3, at: task.updatedAt, role: "lead", kind: "status", text: "执行已结束" },
+    { seq: 4, at: task.updatedAt, role: "user", kind: "message", text: "second" },
+    { seq: 5, at: task.updatedAt, role: "lead", kind: "message", text: "unfinished" },
+    { seq: 6, at: task.updatedAt, role: "system", kind: "status", text: "正在停止主手与副手" },
+  ];
+  const answers = projectTwoCodeRows(task).filter((row) => row.kind === "assistantText");
+  assert.equal(answers[0]?.entityId, "two-code-fork:3");
+  assert.equal(answers[0]?.actions?.canFork, true);
+  assert.equal(answers[1]?.entityId, undefined);
+});
+
 test("拒绝早于工具参数时只保留一行未执行，迟到终态不能改成成功", () => {
   const task = structuredClone(base);
   task.events = [

@@ -22,6 +22,13 @@ const actor = z.object({
   lastReport: z.string().optional(),
 });
 const schema = z.object({
+  forkSource: z
+    .object({
+      taskId: z.uuid(),
+      atSeq: z.number().int().positive(),
+      requestId: z.string().min(1).max(200),
+    })
+    .optional(),
   mode,
   usage: z
     .array(

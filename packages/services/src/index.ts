@@ -1,7 +1,12 @@
 // Descriptors & collection (browser-safe)
 export { type ServiceDescriptor, createServiceDescriptor } from "./descriptors.js";
 export { ServiceCollection } from "./collection.js";
-export { ITwoCodeService, twoCodeSessionId, twoCodeTaskId } from "./two-code/contract.js";
+export {
+  ITwoCodeService,
+  twoCodeSessionId,
+  twoCodeTaskId,
+  twoCodeForkPoints,
+} from "./two-code/contract.js";
 export {
   modelThinkingProfiles,
   selectionThinkingProfile,

@@ -1,6 +1,7 @@
 import type { Event } from "@zcode/rpc";
 import type { TwoCodeModelSettingsApi } from "./settings-contract.js";
 import type { TwoCodeImagesApi } from "./image-contract.js";
+export { twoCodeForkPoints } from "./domain/fork-points.js";
 export {
   modelThinkingProfiles,
   selectionThinkingProfile,
@@ -97,6 +98,7 @@ export interface PermissionRequest {
   detail: string;
 }
 export interface TwoCodeTask {
+  forkSource?: { taskId: string; atSeq: number; requestId: string };
   mode?: TwoCodeMode;
   usage?: RunUsage[];
   id: string;
@@ -126,6 +128,7 @@ export interface ITwoCodeService extends TwoCodeModelSettingsApi, TwoCodeImagesA
   list(workspacePath: string): Promise<TwoCodeTask[]>;
   create(input: CreateTwoCodeTask): Promise<TwoCodeTask>;
   read(taskId: string): Promise<TwoCodeTask>;
+  fork(input: { taskId: string; atSeq: number; requestId: string }): Promise<TwoCodeTask>;
   configure(input: { taskId: string; preferences: TwoCodePreferences }): Promise<TwoCodeTask>;
   submit(input: { taskId: string; requestId: string; text: string }): Promise<TwoCodeTask>;
   cancel(taskId: string): Promise<TwoCodeTask>;

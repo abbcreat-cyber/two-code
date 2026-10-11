@@ -67,6 +67,11 @@ export interface TaskStore {
   save(task: TwoCodeTask): Promise<void>;
 }
 export interface CoordinatorDependencies {
+  forkActors?(
+    task: TwoCodeTask,
+    at: string,
+    targetId: string,
+  ): Promise<Partial<Record<ActorRole, string>>>;
   connections?(task: TwoCodeTask): Promise<Partial<Record<"lead" | "sidekick", EngineConnection>>>;
   lease?: {
     isActive(id: string): Promise<boolean>;

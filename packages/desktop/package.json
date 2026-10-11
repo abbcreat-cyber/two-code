@@ -1,6 +1,6 @@
 {
   "name": "@zcode/desktop",
-  "version": "0.8.14",
+  "version": "0.8.15",
   "private": true,
   "description": "Two Code multi-harness workspace, based on ZCode",
   "author": "ZCode",

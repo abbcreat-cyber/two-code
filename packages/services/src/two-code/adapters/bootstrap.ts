@@ -15,6 +15,7 @@ import { TaskLease } from "./task-lease.js";
 import { JsonPreferences } from "./preferences.js";
 import { TwoCodeConnections } from "./connections.js";
 import { storeImage, readStoredImage } from "./vision.js";
+import { forkNativeActors } from "./native-fork.js";
 
 export function createTwoCodeService(
   agent: IZCodeAgentService,
@@ -26,6 +27,7 @@ export function createTwoCodeService(
     (process.platform === "win32" ? "D:/Apps/TwoCode/data" : join(homedir(), ".two-code"));
   const connections = new TwoCodeConnections(root);
   const coordinator = new TwoCodeCoordinator({
+    forkActors: (task, at, id) => forkNativeActors(task, at, join(root, "sessions", id)),
     connections: (task) => connections.freeze(task),
     lease: new TaskLease(root),
     store: new JsonTaskStore(join(root, "tasks")),

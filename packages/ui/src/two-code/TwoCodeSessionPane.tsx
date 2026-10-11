@@ -313,6 +313,23 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
       />
       <div className="@container/conversation flex min-h-0 flex-1 flex-col">
         <ConversationTimeline
+          onFork={
+            !busy &&
+            !sending &&
+            !state.configuring &&
+            !props.readOnly &&
+            task?.lead.selection.harness !== "zcode" &&
+            task?.sidekick.selection.harness !== "zcode"
+              ? (target) => {
+                  const atSeq = Number(target.entityId?.replace("two-code-fork:", ""));
+                  if (!Number.isSafeInteger(atSeq)) return;
+                  void state.fork(atSeq).then((created) => {
+                    if (created && draftKeyRef.current === draftKey)
+                      props.onSessionCreated?.(twoCodeSessionId(created));
+                  });
+                }
+              : undefined
+          }
           rows={rows}
           totalCount={rows.length}
           sessionKey={props.sessionId ?? "draft"}

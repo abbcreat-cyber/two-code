@@ -1,5 +1,11 @@
 import type { ITwoCodeService } from "./contract.js";
 import { normalizeThinkingSelection } from "./contract.js";
+export const forkCompletedAnswer = (
+  service: ITwoCodeService,
+  taskId: string,
+  atSeq: number,
+  requestId: string,
+) => service.fork({ taskId, atSeq, requestId });
 
 export const uploadImage = (service: ITwoCodeService, fileName: string, dataBase64: string) =>
   service.importImage({ fileName, dataBase64 });

@@ -2,6 +2,8 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
+fork在源任务执行租约内从已成功回答边界创建新任务，主副手原生会话身份均独立，历史截断，权限/请求ID/分支用量清空，工作区文件不回滚。forkSource持久保存幂等来源；UI复用回答的叉子按钮。原生记录不能确认边界时显式失败，不用摘要代替原生上下文，见session-fork规格。
+
 准入前拒绝通过原生调用ID关联notExecuted及verification.status=not-executed，不写进程退出码/输出。Claude的PreToolUse/canUseTool两个入口共享去重；后到消息不复活已拒绝工具。明确interrupted仅表示中断，不代表未执行或已回滚。主手回执和原工具详情使用同一事件日志，见collaboration-control规格。
 
 主副手原生工具均提供check_text_encoding，经现有permission裁决，只读最多4MiB普通文件并返回编码/BOM/换行格式；不返回原文、不运行shell，格式事实不能代替业务验收。执行回执保留筛选后的警告行并明确未分离stdout/stderr，不能据缺少行断言stderr为空。用户明确指定的副手执行优先于默认正确性关键工作分工；主手仍负责口径与审查。会话路径守卫覆盖当前任务根目录，保留显式用户授权和原生视觉缓存例外。

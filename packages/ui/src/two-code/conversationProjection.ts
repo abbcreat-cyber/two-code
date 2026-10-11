@@ -1,4 +1,4 @@
-import type { TwoCodeTask } from "@zcode/services";
+import { twoCodeForkPoints, type TwoCodeTask } from "@zcode/services";
 import type { ConversationRow, ToolCallRow, TurnHeaderRow } from "@zcode/shared/zcode-protocol-v4";
 import { projectImageMessage } from "./imageMessage.js";
 import { NativeToolRows } from "./nativeToolProjection.js";
@@ -7,6 +7,7 @@ import { NativeToolRows } from "./nativeToolProjection.js";
 export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
   if (!task) return [];
   const rows: ConversationRow[] = [];
+  const forkPoints = new Set(twoCodeForkPoints(task));
   const nativeTools = new NativeToolRows();
   const toolActivities = new Map<string, Extract<ConversationRow, { kind: "timelineMarker" }>>();
   const textBlocks = new Map<string, Extract<ConversationRow, { kind: "assistantText" }>>();
@@ -211,6 +212,16 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
     ) {
       header.state = "completedSuccess";
       header.endedAt = at;
+      if (forkPoints.has(event.seq)) {
+        const answer = rows.findLast(
+          (row) => row.kind === "assistantText" && row.turnId === turnId,
+        );
+        if (answer?.kind === "assistantText") {
+          answer.entityId = `two-code-fork:${event.seq}`;
+          // 原生轮尾动作栏同时检查身份与能力，只有回调不会显示叉子。
+          answer.actions = { ...answer.actions, canFork: true };
+        }
+      }
     }
   }
   if (header) {
