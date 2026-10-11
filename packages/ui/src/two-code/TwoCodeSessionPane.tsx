@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Square } from "lucide-react";
+import { Square, ArrowUp } from "lucide-react";
 import { twoCodeSessionId, twoCodeTaskId } from "@zcode/services";
 import { useTwoCode } from "@/hooks/useTwoCode.js";
 import { ConversationTimeline } from "@/v4/ConversationTimeline.js";
@@ -79,7 +79,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     ],
   );
   const send = (value: string) => {
-    if (busy || sending || state.loading || state.configuring || !value.trim()) return false;
+    if (sending || state.loading || state.configuring || !value.trim()) return false;
     setSending(true);
     void state
       .submit(value)
@@ -162,12 +162,12 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           initialValue={text}
           // 草稿由本组件恢复；禁止编辑器用首次空值在下一帧覆盖已恢复内容。
           syncInitialValueOnMount={false}
-          placeholder={id ? "继续这个任务…" : "描述你的任务…"}
+          placeholder={busy ? "补充要求…" : id ? "继续这个任务…" : "描述你的任务…"}
           inputTestId="two-code-composer"
           submitTestId="two-code-send"
           submitLabel="发送"
           submitting={sending}
-          submitDisabled={busy || state.loading || state.configuring || sending || !text.trim()}
+          submitDisabled={state.loading || state.configuring || sending || !text.trim()}
           enableMentionPanel={false}
           onChange={(value) => {
             setText(value);
@@ -188,14 +188,28 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           }
           submitControl={
             busy ? (
-              <Button
-                aria-label="停止"
-                data-testid="two-code-stop"
-                size="icon-sm"
-                onClick={() => void state.cancel()}
-              >
-                <Square size={14} />
-              </Button>
+              <div className="flex items-center gap-1">
+                {text.trim() && (
+                  <Button
+                    aria-label="发送补充"
+                    title="发送补充"
+                    data-testid="two-code-send"
+                    size="icon-sm"
+                    disabled={sending || state.loading || state.configuring}
+                    onClick={() => send(input.current?.getMarkdown() ?? text)}
+                  >
+                    <ArrowUp size={14} />
+                  </Button>
+                )}
+                <Button
+                  aria-label="停止"
+                  data-testid="two-code-stop"
+                  size="icon-sm"
+                  onClick={() => void state.cancel()}
+                >
+                  <Square size={14} />
+                </Button>
+              </div>
             ) : undefined
           }
         />

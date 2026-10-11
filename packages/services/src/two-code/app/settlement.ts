@@ -17,6 +17,10 @@ export async function settleRun(
   for (const role of ["lead", "sidekick"] as const)
     if (task[role].status === "running") task[role].status = "cancelled";
   if (run.abort.signal.aborted && !failure) outcome = "cancelled";
+  if (run.steeringError) {
+    outcome = "error";
+    failure = run.steeringError;
+  }
   run.committing = true;
   const finished = { ...structuredClone(task), status: outcome, error: failure };
   try {

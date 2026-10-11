@@ -16,4 +16,8 @@ export interface ActiveRun {
   release?: () => Promise<void>;
   duplicate?: boolean;
   committing?: boolean;
+  leadWake?: { promise: Promise<void>; resolve(): void };
+  steering?: Promise<void>;
+  steeringError?: string;
+  updateAdmissions?: Map<string, Promise<void>>;
 }

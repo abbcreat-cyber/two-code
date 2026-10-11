@@ -34,7 +34,7 @@ export class ZCodeAdapter implements HarnessAdapter {
     const initialized = await this.agent.initialize({ workspacePath: input.cwd });
     if (!initialized.available)
       throw new Error(initialized.reason ?? "原生 ZCode 尚未配置可用模型");
-    if (input.handoff) {
+    if (input.handoff || input.readHandoffHistory) {
       this.bridge = new ToolBridge(input);
       await this.bridge.start();
     }

@@ -57,15 +57,28 @@ export interface HarnessInfo {
   }>;
 }
 export interface TaskEvent {
+  requestId?: string;
+  deliveryFailed?: boolean;
+  handoffUserSeq?: number;
+  continuation?: boolean;
   toolCallId?: string;
   notExecuted?: boolean;
   seq: number;
   at: string;
   role: ActorRole | "user" | "system";
-  kind: "message" | "reasoning" | "tool" | "status" | "error" | "handoff";
+  kind:
+    | "message"
+    | "reasoning"
+    | "tool"
+    | "status"
+    | "error"
+    | "handoff"
+    | "handoff_update"
+    | "handoff_report";
   text: string;
 }
 export interface ActorState {
+  availableTools?: string[];
   selection: EngineSelection;
   sessionId?: string;
   actualModel?: string;

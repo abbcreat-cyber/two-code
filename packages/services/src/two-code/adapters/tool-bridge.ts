@@ -1,12 +1,13 @@
 import { createServer, type Server } from "node:http";
 import { randomBytes } from "node:crypto";
 import type { EngineRun } from "../app/ports.js";
+import { handoffToolDescription, sidekickForbiddenTool } from "../domain/handoffs.js";
+import { permissionDenied } from "./permission-feedback.js";
 
 const definitions = [
   {
     name: "sidekick",
-    description:
-      "将明确任务交给唯一持久副手。默认等待；block:false后必须read_sidekick。副手报告需主手核对。",
+    description: handoffToolDescription,
     inputSchema: {
       type: "object",
       properties: { message: { type: "string" }, block: { type: "boolean" } },
@@ -17,6 +18,11 @@ const definitions = [
     name: "read_sidekick",
     description: "等待并读取本任务副手的真实报告。",
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "read_handoff_history",
+    description: "按字符位置读取本任务逐字交接账本；返回nextOffset以继续，不从摘要猜测原文。",
+    inputSchema: { type: "object", properties: { offset: { type: "integer", minimum: 0 } } },
   },
 ];
 export class ToolBridge {
@@ -32,6 +38,7 @@ export class ToolBridge {
       TWO_CODE_TOOL_URL: `${this.origin}/tool`,
       TWO_CODE_TOOL_TOKEN: this.token,
       TWO_CODE_HAS_SIDEKICK: this.input.handoff ? "1" : "0",
+      TWO_CODE_HAS_HISTORY: this.input.readHandoffHistory ? "1" : "0",
     };
   }
   async start(): Promise<void> {
@@ -69,7 +76,14 @@ export class ToolBridge {
           response.writeHead(202).end();
           return;
         } else if (data.method === "ping") result = {};
-        else if (data.method === "tools/list") result = { tools: definitions };
+        else if (data.method === "tools/list")
+          result = {
+            tools: definitions.filter((d) =>
+              d.name === "read_handoff_history"
+                ? !!this.input.readHandoffHistory
+                : !!this.input.handoff,
+            ),
+          };
         else if (data.method === "tools/call") {
           try {
             result = {
@@ -115,7 +129,11 @@ export class ToolBridge {
         throw new Error("权限参数无效");
       return this.input
         .permission(args.tool, args.detail)
-        .then((allow) => (allow ? "allow" : "deny"));
+        .then((allow) =>
+          allow
+            ? "allow"
+            : permissionDenied(this.input, args.tool as string, args.detail as string),
+        );
     }
     if (name === "sidekick" && this.input.handoff) {
       if (
@@ -127,6 +145,8 @@ export class ToolBridge {
       return this.input.handoff(args.message, args.block as boolean | undefined);
     }
     if (name === "read_sidekick" && this.input.readSidekick) return this.input.readSidekick();
+    if (name === "read_handoff_history" && this.input.readHandoffHistory)
+      return this.input.readHandoffHistory(args.offset as number | undefined);
     throw new Error("当前角色没有该工具");
   }
   async close(): Promise<void> {
@@ -140,8 +160,11 @@ export class ToolBridge {
 export const piToolExtension = `
 import { Type } from '@earendil-works/pi-ai';
 export default function(pi) {
+  const forbidden = ${sidekickForbiddenTool.toString()};
+  let editReminder = false;
   pi.registerCommand('two-code-tool-bridge', {description:'Two Code permission and sidekick bridge v1',handler:async()=>{}});
   const nativePowerShell = () => {
+    if (process.env.TWO_CODE_ACTOR_ROLE === 'sidekick') pi.setActiveTools(pi.getActiveTools().filter(name => !forbidden(name)));
     if (process.platform !== 'win32') return false;
     const active = pi.getActiveTools();
     if (!active.some(name => ['bash','run_command','powershell'].includes(name)) || !pi.getAllTools().some(tool => tool.name === 'powershell')) return false;
@@ -149,23 +172,31 @@ export default function(pi) {
     return true;
   };
   pi.on('session_start', nativePowerShell);
-  pi.on('before_agent_start', (event) => nativePowerShell() ? {systemPrompt:event.systemPrompt+'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。'} : undefined);
+  pi.on('before_agent_start', (event) => { editReminder = false; return nativePowerShell() ? {systemPrompt:event.systemPrompt+'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。'} : undefined; });
+  pi.on('tool_result', event => {
+    if (process.env.TWO_CODE_HAS_SIDEKICK !== '1' || editReminder || event.isError || !['write','edit','write_file','edit_file'].includes(event.toolName)) return;
+    editReminder = true;
+    return {content:[...(event.content ?? []),{type:'text',text:'协作提醒：实现和验证默认交给唯一副手；仅1–2轮即可完成并确认的微小修改、正确性关键工作和需亲自判断的渲染工作由主手实施。明确用户分工优先；不要为本提醒重做已完成的修改。'}]};
+  });
   pi.on('tool_call', async (event) => {
+    if (process.env.TWO_CODE_ACTOR_ROLE === 'sidekick' && forbidden(event.toolName)) return {block:true,reason:'此动作属于主手权限，副手应报告需求而非调用'};
+    if (event.toolName === 'read_handoff_history') return;
     if (['sidekick','read_sidekick'].includes(event.toolName)) return;
     if (['subagent','agent_send','workflow'].includes(event.toolName)) return {block:true,reason:'请使用Two Code管理的持久副手，不允许递归委派'};
     try {
       const r = await fetch(process.env.TWO_CODE_TOOL_URL, {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN},body:JSON.stringify({name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}})});
       const result = await r.json();
-      if (!r.ok || result.text !== 'allow') return {block:true,reason:'Two Code任务权限模式未允许此操作'};
+      if (!r.ok || result.text !== 'allow') return {block:true,reason:r.ok && typeof result.text === 'string' ? result.text : 'Two Code权限通道未确认允许此操作'};
     } catch { return {block:true,reason:'Two Code权限通道不可用，命令未执行'}; }
   });
-  if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
   const call = async (name, args, signal) => {
     const r = await fetch(process.env.TWO_CODE_TOOL_URL, { method:'POST', signal, headers:{'content-type':'application/json', authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN}, body:JSON.stringify({name, arguments:args}) });
     const result = await r.json(); if(!r.ok) throw Error(result.error || '派工失败');
     return { content:[{type:'text',text:result.text}], details:{} };
   };
-  pi.registerTool({name:'sidekick',label:'副手',description:'派工给唯一持久副手，默认阻塞等待报告。主手须审查证据。',parameters:Type.Object({message:Type.String(),block:Type.Optional(Type.Boolean())}),execute:(id,args,signal)=>call('sidekick',args,signal)});
+  if (process.env.TWO_CODE_HAS_HISTORY === '1') pi.registerTool({name:'read_handoff_history',label:'交接历史',description:'读取本任务逐字交接历史，按nextOffset翻页；压缩后按需恢复确切原文。',parameters:Type.Object({offset:Type.Optional(Type.Integer({minimum:0}))}),execute:(id,args,signal)=>call('read_handoff_history',args,signal)});
+  if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
+  pi.registerTool({name:'sidekick',label:'副手',description:${JSON.stringify(handoffToolDescription)},parameters:Type.Object({message:Type.String(),block:Type.Optional(Type.Boolean())}),execute:(id,args,signal)=>call('sidekick',args,signal)});
   pi.registerTool({name:'read_sidekick',label:'副手报告',description:'等待并读取本任务副手的报告。',parameters:Type.Object({}),execute:(id,args,signal)=>call('read_sidekick',args,signal)});
 }
 `;

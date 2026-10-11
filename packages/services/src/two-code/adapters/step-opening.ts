@@ -1,6 +1,34 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stepOpeningSources } from "./step-opening-sources.js";
+import type { EngineEvent } from "../app/ports.js";
+
+export function openingToolEvent(
+  record: Record<string, unknown>,
+): { event: EngineEvent; stopped: boolean } | undefined {
+  if (!record.isError) return;
+  const value = record.result;
+  const text =
+    typeof value === "string"
+      ? value
+      : value && typeof value === "object" && "content" in value && Array.isArray(value.content)
+        ? value.content
+            .filter((p) => p?.type === "text")
+            .map((p) => String(p.text ?? ""))
+            .join("")
+        : "";
+  if (!/\[desktop-opening-(required|stopped)\]/.test(text)) return;
+  const stopped = text.includes("[desktop-opening-stopped]");
+  return {
+    stopped,
+    event: {
+      kind: "tool",
+      toolCallId: String(record.toolCallId),
+      notExecuted: true,
+      text: stopped ? "工具未执行：缺少开场说明，本轮已停止。" : "工具尚未执行，等待补充开场说明。",
+    },
+  };
+}
 
 /** 沿用阶跃星辰原生provider包装，Two Code只装配当前角色和已冻结的原生连接。 */
 export const stepOpeningExtension = `

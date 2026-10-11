@@ -9,7 +9,7 @@ import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { subscriptionEnvironment } from "./chatgpt-subscription.js";
 import { piThinkingLevel } from "../domain/thinking.js";
 import { handleExtensionUi } from "./pi-extension-ui.js";
-import { writeStepOpeningExtension } from "./step-opening.js";
+import { writeStepOpeningExtension, openingToolEvent } from "./step-opening.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -41,6 +41,8 @@ export class PiAdapter implements HarnessAdapter {
   private stderr = "";
   private buffer = "";
   private failure?: Error;
+  private updateReady?: ReturnType<typeof Promise.withResolvers<void>>;
+  private runSignal?: AbortSignal;
   private async start(input: EngineRun): Promise<void> {
     const step = this.harness === "step-code";
     const entry = step ? await stepExecutable() : await piEntry();
@@ -174,6 +176,7 @@ export class PiAdapter implements HarnessAdapter {
     }
   }
   private fail(error: Error): void {
+    this.updateReady?.reject(error);
     this.failure = error;
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
@@ -197,9 +200,15 @@ export class PiAdapter implements HarnessAdapter {
     });
   }
   async run(input: EngineRun): Promise<EngineReport> {
+    this.runSignal = input.signal;
     input.signal.throwIfAborted();
     if (this.child) await this.close();
-    await this.start(input);
+    this.updateReady = Promise.withResolvers<void>();
+    void this.updateReady.promise.catch(() => {});
+    await this.start(input).catch((error) => {
+      this.updateReady?.reject(error);
+      throw error;
+    });
     const registered = await this.request("get_commands");
     if (
       this.harness === "step-code" &&
@@ -309,25 +318,11 @@ export class PiAdapter implements HarnessAdapter {
         const start = tools.get(String(record.toolCallId));
         if (start) usage.toolMs += performance.now() - start;
         tools.delete(String(record.toolCallId));
-        const result =
-          typeof record.result === "string"
-            ? record.result
-            : contentText(object(record.result).content);
-        if (record.isError && /\[desktop-opening-(required|stopped)\]/.test(result)) {
-          const stopped = result.includes("[desktop-opening-stopped]");
-          const notice = stopped
-            ? "工具未执行：缺少开场说明，本轮已停止。"
-            : "工具尚未执行，等待补充开场说明。";
-          if (stopped) openingFailure = notice;
+        const blocked = openingToolEvent(record);
+        if (blocked) {
+          if (blocked.stopped) openingFailure = blocked.event.text;
           // SDK的start早于tool_call门禁；保存拒绝回执，不能把尝试显示成实际执行。
-          void input
-            .emit({
-              kind: "tool",
-              text: notice,
-              toolCallId: String(record.toolCallId),
-              notExecuted: true,
-            })
-            .catch(rejectRun);
+          void input.emit(blocked.event).catch(rejectRun);
         }
       } else if (record.type === "extension_ui_request") {
         void handleExtensionUi(record, input, this.label, (response) => {
@@ -348,6 +343,7 @@ export class PiAdapter implements HarnessAdapter {
       const ack = await this.request("prompt", { message: input.prompt });
       if (ack.disposition === "handled")
         throw new Error(`${this.label} 处理了命令，但未启动模型任务`);
+      this.updateReady.resolve();
       await settled;
       if (usage.steps) await input.usage?.({ ...usage });
       input.signal.throwIfAborted();
@@ -358,6 +354,7 @@ export class PiAdapter implements HarnessAdapter {
         sessionId: typeof finalState.sessionFile === "string" ? finalState.sessionFile : sessionId,
       };
     } finally {
+      this.updateReady.reject(new Error(`${this.label} 本轮已结束`));
       input.signal.removeEventListener("abort", abort);
       this.onRecord = undefined;
       this.onFailure = undefined;
@@ -367,7 +364,18 @@ export class PiAdapter implements HarnessAdapter {
     if (!this.child || this.child.exitCode !== null) return;
     await this.request("abort").catch(() => undefined);
   }
+  async update(message: string): Promise<void> {
+    this.runSignal?.throwIfAborted();
+    await this.updateReady?.promise;
+    this.runSignal?.throwIfAborted();
+    if (!this.onRecord || !this.child || this.child.exitCode !== null)
+      throw new Error(`${this.label}已结束，更新未送达`);
+    await this.request("steer", { message });
+    if (!this.onRecord)
+      throw new Error(`${this.label}恰好结束，更新未确认生效；请读取结果后重新交接`);
+  }
   async close(): Promise<void> {
+    this.updateReady?.reject(new Error(`${this.label} 会话已关闭`));
     const child = this.child;
     if (child && child.exitCode === null) {
       child.stdin.end();

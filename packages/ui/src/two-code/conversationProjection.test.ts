@@ -101,6 +101,51 @@ test("cancelled handoff never appears as success in native timeline", () => {
   assert.equal(rows.find((r) => r.kind === "toolCall")?.status, "cancelled");
 });
 
+test("不同任务的相同事件序号不共享原版工具展开状态", () => {
+  const first = structuredClone(base);
+  first.events = [
+    { seq: 1, at: first.updatedAt, role: "user", kind: "message", text: "工作" },
+    { seq: 2, at: first.updatedAt, role: "lead", kind: "handoff", text: "派工" },
+  ];
+  const second = { ...structuredClone(first), id: "other-task" };
+  const a = projectTwoCodeRows(first),
+    b = projectTwoCodeRows(second);
+  assert.notEqual(
+    a.find((r) => r.kind === "toolCall")!.toolCallId,
+    b.find((r) => r.kind === "toolCall")!.toolCallId,
+  );
+  assert.notEqual(
+    a.find((r) => r.kind === "turnHeader")!.turnId,
+    b.find((r) => r.kind === "turnHeader")!.turnId,
+  );
+});
+
+test("运行中用户补充不取消旧交接，也不丢失其后到达的副手报告", () => {
+  const task = structuredClone(base);
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "先做" },
+    { seq: 2, at: task.updatedAt, role: "lead", kind: "handoff", text: "旧brief" },
+    {
+      seq: 3,
+      at: task.updatedAt,
+      role: "user",
+      kind: "message",
+      text: "改一下",
+      continuation: true,
+    },
+    { seq: 4, at: task.updatedAt, role: "lead", kind: "handoff_update", text: "新brief" },
+    { seq: 5, at: task.updatedAt, role: "sidekick", kind: "message", text: "新结果" },
+  ];
+  const rows = projectTwoCodeRows(task);
+  rows.forEach((r) => conversationRowSchema.parse(r));
+  const tool = rows.find((r) => r.kind === "toolCall")!;
+  assert.equal(tool.status, "running");
+  assert.match(tool.inputText, /新brief/);
+  assert.equal(tool.output?.text, "新结果");
+  assert.equal(rows.filter((r) => r.kind === "turnHeader").length, 1);
+  assert.equal(rows.filter((r) => r.kind === "userInput").length, 2);
+});
+
 test("saving model preferences cannot extend a completed turn duration", () => {
   const task = structuredClone(base);
   task.status = "completed";

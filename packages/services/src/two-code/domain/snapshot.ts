@@ -14,6 +14,7 @@ export function parsePreferences(value: unknown): TwoCodePreferences {
   return z.object({ dual: z.boolean(), lead: selection, sidekick: selection, mode }).parse(value);
 }
 const actor = z.object({
+  availableTools: z.array(z.string()).optional(),
   selection,
   status,
   sessionId: z.string().optional(),
@@ -54,10 +55,23 @@ const schema = z.object({
       seq: z.number().int().positive(),
       at: z.string(),
       role: z.enum(["lead", "sidekick", "user", "system"]),
-      kind: z.enum(["message", "reasoning", "tool", "status", "error", "handoff"]),
+      kind: z.enum([
+        "message",
+        "reasoning",
+        "tool",
+        "status",
+        "error",
+        "handoff",
+        "handoff_update",
+        "handoff_report",
+      ]),
       text: z.string(),
       toolCallId: z.string().optional(),
       notExecuted: z.boolean().optional(),
+      continuation: z.boolean().optional(),
+      handoffUserSeq: z.number().int().positive().optional(),
+      requestId: z.string().optional(),
+      deliveryFailed: z.boolean().optional(),
     }),
   ),
 });

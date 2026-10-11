@@ -6,7 +6,11 @@
 
 Step主手移植阶跃星辰1.0.10的提前开场流：原生同模型、无工具、有界短请求后沿用原档位主请求，一轮最多一次。两角色共享单一定义的沟通规则，副手不增加开场请求。来源、豁免、取消与验收见specs/two-code/opening-communication.md。
 
-调用方经contract访问catalog/list/create/read/submit/cancel/respond及onDidChange。运行中不接受第二条普通输入；取消后显式续接保留角色会话。重复requestId不重复执行。副手能力只注入主手，不允许跨任务派工。读者不得把completed当作品质验收。
+调用方经contract访问catalog/list/create/read/submit/cancel/respond及onDidChange。运行中submit作为补充要求交给当前主手，通过原生update入口接收；等待副手报告的主手会被唤醒，由主手决定是否更新同一副手。无更新能力时明确拒绝，送达不明时记录失败并停止旧计划；重复requestId复用准入结果，失败重试不能伪装成功。取消后显式续接保留角色会话。副手派工能力只注入主手，不允许跨任务或递归派工。读者不得把completed当作品质验收。
+
+handoff、handoff_update和handoff_report由同一任务事件日志保存逐字交接事实，handoffUserSeq指向已传递用户要求；两角色通过read_handoff_history按字符分页回读。前端运行中补充保留当前工作轮及同一副手工具行，刷新从快照还原。副手工具表和owner权限均限制主手专有能力；availableTools仅为原生目录诊断，不作为权限裁决依据。
+
+Claude运行中更新采用原生interrupt及流式用户输入，匹配user_message_uuid确认最终报告；Step/Pi采用原生steer。ZCode目前没有运行中更新入口。会话身份可续接，但不承诺任意shell状态或进程跨宿主重启保留；显式启动的后台服务由任务检查并复用。融合来源、适配边界和真实验收见specs/two-code/fusion-integration.md。
 
 UI重开先读快照再消费单调序号变化。Host重启将未完成任务标为可恢复错误，禁止自动重跑。权限等待随取消结束；晚到结果不得覆盖取消。持久化失败必须显式报错。
 

@@ -1,6 +1,7 @@
 import { realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
-import type { TwoCodeMode } from "../contract.js";
+import type { TwoCodeMode, ActorRole } from "../contract.js";
+import { sidekickForbiddenTool } from "../domain/handoffs.js";
 
 async function canonical(path: string): Promise<string> {
   try {
@@ -17,7 +18,9 @@ export async function permissionDecision(
   tool: string,
   detail: string,
   cwd: string,
+  role?: ActorRole,
 ): Promise<"allow" | "deny" | "ask"> {
+  if (role === "sidekick" && sidekickForbiddenTool(tool)) return "deny";
   if (mode === "yolo") return "allow";
   const name = tool.toLowerCase();
   if (
@@ -37,6 +40,8 @@ export async function permissionDecision(
       "todowrite",
       "sidekick",
       "read_sidekick",
+      "read_handoff_history",
+      "mcp__two_code__read_handoff_history",
       "mcp__two_code__sidekick",
       "mcp__two_code__read_sidekick",
     ].includes(name)

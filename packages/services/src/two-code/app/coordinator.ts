@@ -17,14 +17,16 @@ import { withCommunicationPolicy } from "../domain/communication.js";
 import { admitTask } from "./admission.js";
 import { recoverTask } from "./recovery.js";
 import { settleRun } from "./settlement.js";
+import { handoffHistory } from "../domain/handoffs.js";
+import { handoff, readSidekick, wakeChannel } from "./sidekick-handoff.js";
+import { steerRun } from "./steering.js";
+import { readDefaults, writeDefaults } from "./default-preferences.js";
 import {
   appendEvent,
   leadInstruction,
   newTask,
   reconfigureTask,
   sidekickInstruction,
-  sidekickPrompt,
-  validateSelection,
 } from "../domain/task.js";
 
 const copy = (task: TwoCodeTask): TwoCodeTask => structuredClone(task);
@@ -69,26 +71,14 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     role: TaskEvent["role"],
     kind: TaskEvent["kind"],
     text: string,
-    details?: Pick<TaskEvent, "toolCallId" | "notExecuted">,
+    details?: Pick<TaskEvent, "toolCallId" | "notExecuted" | "handoffUserSeq">,
   ) {
     appendEvent(task, { role, kind, text, ...details }, new Date().toISOString());
     this.changes.fire(copy(task));
   }
   catalog = () => this.deps.catalog();
-  preferences = async (): Promise<TwoCodePreferences> =>
-    this.deps.preferences?.read() ?? {
-      dual: true,
-      lead: { harness: "claude-code" },
-      sidekick: { harness: "pi" },
-    };
-  async configurePreferences(input: TwoCodePreferences): Promise<TwoCodePreferences> {
-    input = parsePreferences(input);
-    validateSelection(input.lead);
-    validateSelection(input.sidekick);
-    if (typeof input.dual !== "boolean" || !this.deps.preferences) throw new Error("配置不可保存");
-    await this.deps.preferences.write(input);
-    return structuredClone(input);
-  }
+  preferences = () => readDefaults(this.deps.preferences);
+  configurePreferences = (input: TwoCodePreferences) => writeDefaults(this.deps.preferences, input);
   async list(workspacePath: string): Promise<TwoCodeTask[]> {
     await this.ready;
     for (const latest of await this.deps.store.load()) {
@@ -149,11 +139,30 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       throw new Error("请求编号和任务内容不能为空");
     }
     const existing = this.active.get(task.id);
+    const failedDelivery = task.events.findLast(
+      (e) => e.requestId === input.requestId && e.deliveryFailed,
+    );
+    if (failedDelivery) throw new Error(failedDelivery.text);
     if (task.requestIds.includes(input.requestId) || existing?.requestId === input.requestId) {
+      await existing?.updateAdmissions?.get(input.requestId);
       await existing?.admission;
       return copy(task);
     }
-    if (existing) throw new Error("当前任务仍在执行，请等待或先停止");
+    if (existing) {
+      if (existing.committing) {
+        await existing.work;
+        return this.submit(input);
+      }
+      await steerRun(task, existing, input, {
+        current: () => this.current(task, existing),
+        save: () => this.deps.store.save(task),
+        emit: (event) => {
+          appendEvent(task, event, new Date().toISOString());
+          this.changes.fire(copy(task));
+        },
+      });
+      return copy(task);
+    }
     // 接收锁在首次await前建立，避免同任务并发输入启动两套执行。
     const run: ActiveRun = {
       id: randomUUID(),
@@ -161,6 +170,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       abort: new AbortController(),
       actors: new Map(),
       permissions: new Map(),
+      leadWake: wakeChannel(),
     };
     this.active.set(task.id, run);
     run.admission = admitTask(
@@ -205,6 +215,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       title,
       detail,
       task.workspacePath,
+      role,
     );
     this.current(task, run);
     if (decision !== "ask") return decision === "allow";
@@ -275,24 +286,31 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
             actor.sessionId = event.text;
             await this.deps.store.save(task);
             this.changes.fire(copy(task));
-          } else if (event.kind === "model") actor.actualModel = event.text;
-          else
+          } else if (event.kind === "model") {
+            actor.actualModel = event.text;
+            actor.availableTools = event.availableTools;
+          } else
             this.emit(task, role, event.kind, event.text, {
               toolCallId: event.toolCallId,
               notExecuted: event.notExecuted,
             });
         },
         permission: (title, detail) => this.requestPermission(task, run, role, title, detail),
+        readHandoffHistory: async (offset) => {
+          this.current(task, run);
+          return handoffHistory(task, offset);
+        },
         ...(role === "lead" && task.dual
           ? {
               handoff: (message: string, block = true) => this.handoff(task, run, message, block),
-              readSidekick: () => this.sidekickResult(task, run),
+              readSidekick: () => readSidekick(task, run, () => this.current(task, run)),
             }
           : {}),
       });
       this.current(task, run);
       actor.sessionId = report.sessionId ?? actor.sessionId;
       actor.lastReport = report.text;
+      if (role === "sidekick") this.emit(task, role, "handoff_report", report.text);
       actor.status = "completed";
       this.emit(task, role, "status", "执行已结束，待核对结果");
       await this.deps.store.save(task);
@@ -308,37 +326,21 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     message: string,
     block: boolean,
   ): Promise<string> {
-    this.current(task, run);
-    if (typeof message !== "string" || !message.trim()) throw new Error("副手任务不能为空");
-    if (run.sidekick && task.sidekick.status === "running") {
-      throw new Error("副手仍在执行，请先read_sidekick读取报告；不要重复派工");
-    }
-    this.emit(task, "lead", "handoff", message);
-    run.sidekickRead = false;
-    run.sidekick = this.execute(task, run, "sidekick", sidekickPrompt(task, message)).then(
-      (report) => report.text,
-    );
-    // 非阻塞派工也必须有人观察失败；read_sidekick仍保留原拒绝语义。
-    void run.sidekick.catch(() => undefined);
-    return block
-      ? this.sidekickResult(task, run)
-      : "派工已接受，尚未完成。请在结束前调用read_sidekick。";
-  }
-  private async sidekickResult(task: TwoCodeTask, run: ActiveRun): Promise<string> {
-    this.current(task, run);
-    if (!run.sidekick) throw new Error("本轮尚未派工");
-    const pending = run.sidekick;
-    const report = await pending;
-    this.current(task, run);
-    // 只有真正返回给主手的当前报告才算已读；旧调用迟到不能确认新派工。
-    if (run.sidekick === pending) run.sidekickRead = true;
-    return `${report}\n\n主手须核对原始要求和产物；执行结束不等于验收通过。`;
+    return handoff(task, run, message, block, {
+      current: () => this.current(task, run),
+      emit: (kind, text, userSeq) =>
+        this.emit(task, "lead", kind, text, { handoffUserSeq: userSeq }),
+      execute: (prompt) => this.execute(task, run, "sidekick", prompt),
+      save: () => this.deps.store.save(task),
+    });
   }
   private async runLead(task: TwoCodeTask, run: ActiveRun, prompt: string): Promise<void> {
     let outcome: TwoCodeTask["status"] = "completed";
     let failure: string | undefined;
     try {
       await this.execute(task, run, "lead", prompt);
+      await run.steering;
+      if (run.steeringError) throw new Error(run.steeringError);
       if (run.sidekick && task.sidekick.status === "running") {
         throw new Error("主手结束时副手仍在执行，尚未形成已审查结果");
       }
@@ -350,9 +352,9 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       }
       this.current(task, run);
     } catch (error) {
-      outcome = run.abort.signal.aborted ? "cancelled" : "error";
+      outcome = run.steeringError ? "error" : run.abort.signal.aborted ? "cancelled" : "error";
       // 主动停止已有取消事件，不能把适配器的abort异常当作运行失败回传到界面。
-      failure = outcome === "cancelled" ? undefined : errorText(error);
+      failure = run.steeringError ?? (outcome === "cancelled" ? undefined : errorText(error));
       if (failure) this.emit(task, "system", "error", failure);
       run.abort.abort();
     } finally {

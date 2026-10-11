@@ -56,6 +56,17 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       continue;
     }
     if (event.role === "user" && event.kind === "message") {
+      if (event.continuation && header) {
+        rows.push({
+          ...base(),
+          rowId: rowId + 1,
+          kind: "userInput",
+          origin: "realUser",
+          text: event.text,
+        });
+        message = undefined;
+        continue;
+      }
       toolActivities.clear();
       if (header?.state === "running") {
         header.state = "completedSuccess";
@@ -67,7 +78,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
         handoff.endedAt = header?.endedAt ?? previousAt;
       }
       interruptedTurn = false;
-      turnId = `two-code-turn:${event.seq}`;
+      turnId = `two-code:${task.id}:turn:${event.seq}`;
       header = {
         ...base(),
         kind: "turnHeader",
@@ -89,7 +100,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       handoff = {
         ...base(),
         kind: "toolCall",
-        toolCallId: `sidekick:${event.seq}`,
+        toolCallId: `two-code:${task.id}:sidekick:${event.seq}`,
         toolName: "sidekick",
         status: "running",
         inputText: event.text,
@@ -97,6 +108,13 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
         output: { text: "" },
       };
       rows.push(handoff);
+    } else if (event.kind === "handoff_update" && handoff) {
+      handoff.inputText += `\n\n<lead_update>\n${event.text}\n</lead_update>`;
+      handoff.input = {
+        description: `副手 · ${task.sidekick.selection.harness}`,
+        task: handoff.inputText,
+      };
+      message = undefined;
     } else if (event.role === "sidekick" && handoff) {
       if (event.kind === "message") handoff.output!.text += event.text;
       if (event.kind === "tool") handoff.output!.text += `\n调用工具：${event.text}\n`;

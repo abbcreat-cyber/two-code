@@ -9,6 +9,7 @@ import type {
   ActorRole,
 } from "../contract.js";
 export interface EngineEvent {
+  availableTools?: string[];
   toolCallId?: string;
   notExecuted?: boolean;
   kind: "message" | "reasoning" | "tool" | "session" | "model";
@@ -30,6 +31,7 @@ export interface EngineRun {
   permission(title: string, detail: string): Promise<boolean>;
   handoff?: (message: string, block?: boolean) => Promise<string>;
   readSidekick?: () => Promise<string>;
+  readHandoffHistory?: (offset?: number) => Promise<string>;
 }
 export interface EngineConnection {
   subscription?: { agentDir: string; node: string; proxy: string };
@@ -45,6 +47,7 @@ export interface EngineReport {
   sessionId?: string;
 }
 export interface HarnessAdapter {
+  update?(message: string): Promise<void>;
   run(input: EngineRun): Promise<EngineReport>;
   cancel(): Promise<void>;
   close(): Promise<void>;

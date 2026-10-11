@@ -7,17 +7,34 @@ import {
   tool,
   type Query,
   type Options,
+  type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { EngineRun, EngineReport, HarnessAdapter } from "../app/ports.js";
 import { claudeExecutable } from "./paths.js";
+import { handoffToolDescription } from "../domain/handoffs.js";
+import { InputStream } from "./input-stream.js";
+import { permissionDenied } from "./permission-feedback.js";
 
 export class ClaudeAdapter implements HarnessAdapter {
   private active?: Query;
   private abort?: AbortController;
   private child?: ChildProcessWithoutNullStreams;
   private stopping?: Promise<void>;
+  private inbox?: InputStream<SDKUserMessage>;
+  private messageId?: ReturnType<typeof randomUUID>;
+  private sessionId?: string;
+  private updates = 0;
+  private updateFailure?: Error;
+  private updateTail: Promise<void> = Promise.resolve();
+  private updateReady?: ReturnType<typeof Promise.withResolvers<void>>;
+  private generation = 0;
+  private runSignal?: AbortSignal;
   async run(input: EngineRun): Promise<EngineReport> {
+    this.generation++;
+    this.runSignal = input.signal;
+    this.updateReady = Promise.withResolvers<void>();
+    void this.updateReady.promise.catch(() => {});
     const executable = await claudeExecutable();
     if (!executable) throw new Error("未找到 Claude Code，请安装 CLI 或配置 TWO_CODE_CLAUDE_CLI");
     input.signal.throwIfAborted();
@@ -28,22 +45,49 @@ export class ClaudeAdapter implements HarnessAdapter {
     };
     input.signal.addEventListener("abort", stop, { once: true });
     const sessionId = input.sessionId ?? randomUUID();
+    this.sessionId = sessionId;
+    this.inbox = new InputStream<SDKUserMessage>();
+    this.messageId = randomUUID();
+    this.updates = 0;
+    this.updateFailure = undefined;
+    this.updateTail = Promise.resolve();
+    this.inbox.push({
+      type: "user",
+      message: { role: "user", content: input.prompt },
+      parent_tool_use_id: null,
+      session_id: sessionId,
+      uuid: this.messageId,
+    });
     await input.emit({ kind: "session", text: sessionId });
-    const tools = input.handoff
-      ? [
-          tool(
-            "sidekick",
-            "将任务交给唯一持久副手，默认等待；收到报告后主手核对证据。",
-            { message: z.string().min(1), block: z.boolean().optional() },
-            async ({ message, block }) => ({
-              content: [{ type: "text" as const, text: await input.handoff!(message, block) }],
-            }),
-          ),
-          tool("read_sidekick", "等待并读取副手报告。", {}, async () => ({
-            content: [{ type: "text" as const, text: await input.readSidekick!() }],
-          })),
-        ]
-      : [];
+    const tools = [
+      ...(input.handoff
+        ? [
+            tool(
+              "sidekick",
+              handoffToolDescription,
+              { message: z.string().min(1), block: z.boolean().optional() },
+              async ({ message, block }) => ({
+                content: [{ type: "text" as const, text: await input.handoff!(message, block) }],
+              }),
+            ),
+            tool("read_sidekick", "等待并读取副手报告。", {}, async () => ({
+              content: [{ type: "text" as const, text: await input.readSidekick!() }],
+            })),
+          ]
+        : []),
+      ...(input.readHandoffHistory
+        ? [
+            tool(
+              "read_handoff_history",
+              "逐字读取本任务交接历史，按nextOffset翻页，不依赖摘要猜测原文。",
+              { offset: z.number().int().nonnegative().optional() },
+              async ({ offset }) => ({
+                content: [{ type: "text" as const, text: await input.readHandoffHistory!(offset) }],
+              }),
+            ),
+          ]
+        : []),
+    ];
     const effort = ["low", "medium", "high", "xhigh", "max"].includes(
       input.selection.thinking ?? "",
     )
@@ -76,7 +120,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     let resultSeen = false;
     try {
       this.active = query({
-        prompt: input.prompt,
+        prompt: this.inbox,
         options: {
           cwd: input.cwd,
           pathToClaudeCodeExecutable: executable,
@@ -131,7 +175,13 @@ export class ClaudeAdapter implements HarnessAdapter {
                       hookSpecificOutput: {
                         hookEventName: "PreToolUse",
                         permissionDecision: allow ? "allow" : "deny",
-                        permissionDecisionReason: "Two Code任务权限模式",
+                        permissionDecisionReason: allow
+                          ? "Two Code任务权限模式允许"
+                          : permissionDenied(
+                              input,
+                              event.tool_name,
+                              JSON.stringify(event.tool_input),
+                            ),
                       },
                     };
                   },
@@ -139,24 +189,44 @@ export class ClaudeAdapter implements HarnessAdapter {
               },
             ],
           },
-          disallowedTools: ["Agent", "Task"],
+          disallowedTools: [
+            "Agent",
+            "Task",
+            ...(input.role === "sidekick"
+              ? [
+                  "AskUserQuestion",
+                  "EnterPlanMode",
+                  "ExitPlanMode",
+                  "SendMessage",
+                  "TeamCreate",
+                  "TeamDelete",
+                  "Workflow",
+                  "ListAgents",
+                  "PushNotification",
+                  "ScheduleWakeup",
+                  "CronCreate",
+                  "CronDelete",
+                  "ReportFindings",
+                ]
+              : []),
+          ],
           ...(tools.length
             ? {
                 mcpServers: {
                   two_code: createSdkMcpServer({ name: "two_code", version: "0.1.0", tools }),
                 },
-                allowedTools: ["mcp__two_code__sidekick", "mcp__two_code__read_sidekick"],
               }
             : {}),
           canUseTool: async (name, args) => {
             const allowed = await input.permission(name, JSON.stringify(args, null, 2));
             return allowed
               ? { behavior: "allow", updatedInput: args }
-              : { behavior: "deny", message: "用户未批准此操作" };
+              : { behavior: "deny", message: permissionDenied(input, name, JSON.stringify(args)) };
           },
           env: { ...process.env, ...connectionEnv, CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: "false" },
         },
       });
+      this.updateReady.resolve();
       for await (const message of this.active) {
         input.signal.throwIfAborted();
         if (message.type === "stream_event") {
@@ -198,8 +268,15 @@ export class ClaudeAdapter implements HarnessAdapter {
             if (block.type === "tool_use") await input.emit({ kind: "tool", text: block.name });
           }
         } else if (message.type === "system" && message.subtype === "init") {
-          await input.emit({ kind: "model", text: message.model });
+          await input.emit({ kind: "model", text: message.model, availableTools: message.tools });
         } else if (message.type === "result") {
+          // interrupt的旧结果不能结束已提交更新的交接；等匹配原生user_message_uuid的回执。
+          if (this.updates && message.user_message_uuid !== this.messageId) {
+            if (!message.user_message_uuid)
+              throw new Error("Claude未返回更新消息身份，不能假定已收到更新");
+            continue;
+          }
+          this.inbox.finish();
           resultSeen = true;
           const totals = Object.values(message.modelUsage).reduce(
             (sum, u) => ({
@@ -225,16 +302,59 @@ export class ClaudeAdapter implements HarnessAdapter {
         }
       }
       if (!resultSeen) throw new Error("Claude Code 已退出但未返回结算结果");
+      if (this.updateFailure) throw this.updateFailure;
       return { text, sessionId };
     } finally {
+      this.updateReady.reject(new Error("Claude本轮已结束"));
       input.signal.removeEventListener("abort", stop);
+      this.inbox.finish();
       await this.stopping;
       this.active?.close();
       this.active = undefined;
       this.child = undefined;
     }
   }
+  update(message: string): Promise<void> {
+    const generation = this.generation,
+      ready = this.updateReady;
+    const update = this.updateTail.then(async () => {
+      await ready?.promise;
+      if (generation !== this.generation) throw new Error("原交接已结束，更新未送达");
+      this.runSignal?.throwIfAborted();
+      if (!this.active || !this.inbox || this.inbox.closed)
+        throw new Error("副手已结束，更新未送达；请先读报告再重新派工");
+      this.messageId = randomUUID();
+      this.updates++;
+      const active = this.active,
+        inbox = this.inbox;
+      try {
+        const receipt = await active.interrupt();
+        if (generation !== this.generation || this.active !== active)
+          throw new Error("原交接已结束，不能将更新送入后续交接");
+        this.runSignal?.throwIfAborted();
+        if (receipt?.still_queued?.length)
+          throw new Error("原生交接仍在排队，不能确认旧任务已经中断");
+        inbox.push({
+          type: "user",
+          message: { role: "user", content: message },
+          parent_tool_use_id: null,
+          session_id: this.sessionId,
+          uuid: this.messageId,
+          priority: "now",
+        });
+      } catch (error) {
+        if (generation !== this.generation || this.active !== active) throw error;
+        this.updateFailure = new Error(`Claude更新未确认送达：${String(error)}`);
+        inbox.finish();
+        await this.cancel();
+        throw this.updateFailure;
+      }
+    });
+    this.updateTail = update.catch(() => {});
+    return update;
+  }
   cancel(): Promise<void> {
+    this.inbox?.finish();
     if (this.stopping) return this.stopping;
     this.stopping = this.stopTree();
     return this.stopping;
@@ -264,6 +384,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     this.abort?.abort();
   }
   async close(): Promise<void> {
+    this.updateReady?.reject(new Error("Claude会话已关闭"));
     if (this.active) await this.cancel();
     this.active?.close();
     this.active = undefined;
