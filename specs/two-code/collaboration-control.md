@@ -1,5 +1,7 @@
 # 协作控制与回执一致性
 
+常用协作第四组：主副手独立读取同一图片；计划模式下写入请求被拒且不落盘，切至编辑后由原副手续接；同一副手依次处理两个不同文件，第二轮不得覆盖第一轮产物。以真实像素工具调用、实际文件副作用、拒绝事实、原生session和交接数量验收，不把模型措辞或审查结论质量当产品问题。隔离QA目录，Step Plan主手/Claude DeepSeek high副手，单轮最长150秒。
+
 常用协作第三组：验证命令先失败→同一副手修复后成功→第三轮只回读已验证结果（不重跑），同时回归执行中连续补充、失败后续接和服务重开。保护验证脚本，以执行次数文件、退出码、分轮verification边界、原生session及实际产物判断配合正确性，不将失败验证本身误当协调器失败，不允许上轮成功替当前轮背书。文件与命令仅限隔离QA目录，单轮最长150秒。
 
 实测原生Claude PowerShell失败回执以`Exit code 7`开头（无冒号），旧提取器只识别`Exit code: 7`或`EXITCODE=7`，造成正常命令退出码丢失。适配器增加原生空格格式，仍按完整行匹配，按第一个完整标记记录且只接受安全整数；不解析模型自述，不根据缺失值补0，也不根据stdout字符串改变原生成功/失败状态。后续交接仍按handoff边界隔离回执。首版夹具的FAIL_OLD/PASS_REPAIRED不属于受限摘要格式，已改为标准FAIL:/PASS:标记，未扩大产物摘要规则。
@@ -64,3 +66,10 @@ update → 检查run generation → tracker快照未结束调用ID → native in
 - `D:/Apps/TwoCode/qa/receipts-ui-1791719684163`：0.8.20安装包原工具详情可见原生退出码7和修复后当前成功回执，页面异常0。早期UI夹具用父节点innerText读取，无法穿透CodeViewer的Shadow DOM，后改用可见文本定位器；另将模型合法对比旧结果的文字误当成结构化回执串位，已限制为当前回执文本验收，没有修改产品显示或角色提示词。
 
 133项回归通过，typecheck通过，架构违规0，lint错误0/原有警告70。任务执行成功/失败继续由原生状态决定，新增退出码仅为原始证据字段。
+
+0.8.20第四组常用协作验收（4项、6轮真实调用）：
+
+- `D:/Apps/TwoCode/qa/vision-live-1791719847698`：Step Plan主手和Claude DeepSeek副手均调用真实view_image，独立读到首张图的7294、蓝圆和红三角。保留before-refresh.png后，同名probe.png替换为1568、红圆和绿三角；重开服务沿用两个原生session再调用view_image，双方识别新像素，未沿用旧图。第二轮证据image-refresh.json/image-refresh-results.json；两个session ID均保持。
+- `D:/Apps/TwoCode/qa/common-boundaries-1791719859417`：计划模式下副手Write被明确记为notExecuted，requested.json不存在；配置切至edit后同一主副手session正常创建目标文件。另一并行任务连续处理one.json、two.json，产物各自保留FIRST/11与SECOND/22，第二次交接未覆盖one-result.json，两份输入逐字不变。
+
+本组未发现新的协调/适配运行时缺陷，未更改模型提示词或产品行为，桌面继续使用0.8.20。新增常用边界和同名图片更新的真实回归脚本；typecheck、lint及架构检查通过，lint0错误/原有70警告。所有模型测试和图片夹具在D盘隔离目录中完成，没有操作用户鼠标或键盘。
