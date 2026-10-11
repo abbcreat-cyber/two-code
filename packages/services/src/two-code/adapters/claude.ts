@@ -135,6 +135,14 @@ export class ClaudeAdapter implements HarnessAdapter {
                 hooks: [
                   async (event) => {
                     if (event.hook_event_name !== "PreToolUse") return {};
+                    // 自有浏览器在执行函数内按具体动作裁决，避免一次点击重复询问权限。
+                    if (event.tool_name === "mcp__two_code__browser")
+                      return {
+                        hookSpecificOutput: {
+                          hookEventName: "PreToolUse",
+                          permissionDecision: "allow",
+                        },
+                      };
                     const allow = await input.permission(
                       event.tool_name,
                       JSON.stringify(event.tool_input),
@@ -187,6 +195,7 @@ export class ClaudeAdapter implements HarnessAdapter {
               }
             : {}),
           canUseTool: async (name, args, context) => {
+            if (name === "mcp__two_code__browser") return { behavior: "allow", updatedInput: args };
             const allowed = await input.permission(name, JSON.stringify(args, null, 2));
             if (!allowed) await receipts.denied(name, context.toolUseID);
             return allowed

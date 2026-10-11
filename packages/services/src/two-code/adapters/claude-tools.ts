@@ -4,9 +4,17 @@ import type { EngineRun } from "../app/ports.js";
 import { handoffToolDescription } from "../domain/handoffs.js";
 import { viewImage, visionDescription } from "./vision.js";
 import { inspectTextFile, textFactsDescription } from "./text-file-facts.js";
+import { browserDescription, runBrowserTool } from "./browser.js";
 
 export function claudeTools(input: EngineRun) {
   return [
+    ...(input.browser
+      ? [
+          tool("browser", browserDescription, { request: z.string().min(1) }, ({ request }) =>
+            runBrowserTool(input, request),
+          ),
+        ]
+      : []),
     tool(
       "check_text_encoding",
       textFactsDescription,

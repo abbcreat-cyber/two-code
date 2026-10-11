@@ -1,5 +1,9 @@
 import type { ITwoCodeService } from "./contract.js";
 import { normalizeThinkingSelection } from "./contract.js";
+import type { TwoCodeBrowserExecutor } from "./contract.js";
+// 装配层透传当前窗口Host执行器，不建立第二个浏览器或跨窗口共享状态。
+export const windowBrowserExecutor = (executor: TwoCodeBrowserExecutor): TwoCodeBrowserExecutor =>
+  executor;
 export async function saveNamedCombination(service: ITwoCodeService, name: string) {
   const library = await service.combinations();
   return service.saveCombination({

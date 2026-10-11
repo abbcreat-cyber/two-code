@@ -2,6 +2,7 @@ import { realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import type { TwoCodeMode, ActorRole } from "../contract.js";
 import { sidekickForbiddenTool } from "../domain/handoffs.js";
+import { parseTwoCodeBrowserCommand, browserCommandIsReadOnly } from "../domain/browser-command.js";
 
 async function canonical(path: string): Promise<string> {
   try {
@@ -21,6 +22,15 @@ export async function permissionDecision(
   role?: ActorRole,
 ): Promise<"allow" | "deny" | "ask"> {
   if (role === "sidekick" && sidekickForbiddenTool(tool)) return "deny";
+  if (["browser", "mcp__two_code__browser"].includes(tool.toLowerCase())) {
+    try {
+      const command = parseTwoCodeBrowserCommand(JSON.parse(detail).request);
+      if (browserCommandIsReadOnly(command)) return "allow";
+      return mode === "plan" ? "deny" : mode === "yolo" ? "allow" : "ask";
+    } catch {
+      return "deny";
+    }
+  }
   if (mode === "yolo") return "allow";
   const name = tool.toLowerCase();
   if (

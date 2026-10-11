@@ -240,6 +240,16 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     try {
       const usageId = randomUUID();
       const report = await adapter.run({
+        ...(this.deps.browser
+          ? {
+              browser: async (command) => {
+                this.current(task, run);
+                const result = await this.deps.browser!(task, command, run.abort.signal);
+                this.current(task, run);
+                return result;
+              },
+            }
+          : {}),
         role,
         connection: run.connections?.[role],
         mode: task.mode ?? "build",

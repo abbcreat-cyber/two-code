@@ -8,6 +8,7 @@ import type {
   RunUsage,
   ActorRole,
 } from "../contract.js";
+import type { BrowserCommand, BrowserCommandResult } from "@zcode/shared";
 export interface EngineEvent {
   blockId?: string;
   availableTools?: string[];
@@ -25,6 +26,7 @@ export interface EngineEvent {
   text: string;
 }
 export interface EngineRun {
+  browser?: (command: BrowserCommand) => Promise<BrowserCommandResult>;
   role?: ActorRole;
   connection?: EngineConnection;
   mode?: TwoCodeMode;
@@ -67,6 +69,11 @@ export interface TaskStore {
   save(task: TwoCodeTask): Promise<void>;
 }
 export interface CoordinatorDependencies {
+  browser?(
+    task: TwoCodeTask,
+    command: BrowserCommand,
+    signal: AbortSignal,
+  ): Promise<BrowserCommandResult>;
   forkActors?(
     task: TwoCodeTask,
     at: string,

@@ -32,7 +32,7 @@ export const VIRTUAL_PASTE_PAGE_FUNCTION = `async (options) => {
     if (element == null) return;
     const view = elementWindow(element);
     if (element instanceof view.HTMLTextAreaElement || element instanceof view.HTMLInputElement) {
-      if (element.disabled || element.readOnly || text.length === 0) return;
+      if (element.disabled || element.readOnly || (text.length === 0 && !replaceInputValue)) return;
       const setValue = (value) => {
         const prototype = Object.getPrototypeOf(element);
         const prototypeSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
@@ -40,7 +40,11 @@ export const VIRTUAL_PASTE_PAGE_FUNCTION = `async (options) => {
         if (prototypeSetter != null && ownSetter !== prototypeSetter) prototypeSetter.call(element, value);
         else element.value = value;
       };
-      if (element.selectionStart == null || element.selectionEnd == null) {
+      if (text.length === 0 && replaceInputValue) {
+        // 后台guest的CDP Delete可能静默无效；使用与普通填充一致的原生value setter，
+        // 并发出input事件。清空属于替换输入，不能被“空粘贴无操作”分支吞掉。
+        setValue("");
+      } else if (element.selectionStart == null || element.selectionEnd == null) {
         setValue(replaceInputValue ? text : element.value + text);
       } else {
         const start = element.selectionStart ?? element.value.length;
@@ -59,6 +63,10 @@ export const VIRTUAL_PASTE_PAGE_FUNCTION = `async (options) => {
       (element.isContentEditable || element.closest("[contenteditable=true]"))
     ) {
       element.focus();
+      if (replaceInputValue && text.length === 0) {
+        element.ownerDocument.execCommand("delete", false);
+        return;
+      }
       if (html.length > 0) {
         element.ownerDocument.execCommand("insertHTML", false, html);
         return;
@@ -81,6 +89,10 @@ export const VIRTUAL_PASTE_PAGE_FUNCTION = `async (options) => {
   const richText = options.richTextFallback === true
     ? textForMime(options.clipboardItems, "text/html")
     : "";
+  if (plainText.length === 0 && options.replaceInputValue === true) {
+    fallbackPaste(target, "", "", true);
+    return {};
+  }
   if (typeof view.DataTransfer !== "function" || typeof view.ClipboardEvent !== "function") {
     fallbackPaste(target, richText, plainText, options.replaceInputValue === true);
     return {};

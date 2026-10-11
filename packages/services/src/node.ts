@@ -2437,42 +2437,47 @@ export function createLocalServices(options: {
   const services = new ServiceCollection()
     .register(
       ITwoCodeService,
-      createTwoCodeService(zcodeAgentService, zcodeSessionService, async (task) => {
-        const meta = await taskIndexRepo.syncTaskMetaAtGroupedTop({
-          meta: {
-            taskId: twoCodeSessionId(task.id),
-            traceId: task.id,
-            title: task.title,
-            workspacePath: task.workspacePath,
-            workspacePurpose: task.workspacePath
-              .replaceAll("\\", "/")
-              .endsWith("/.zcode/workspace/default")
-              ? "conversation"
-              : "project",
-            createdAt: Date.parse(task.events[0]?.at ?? task.updatedAt),
-            updatedAt: Date.parse(task.updatedAt),
-            // provider是旧任务索引的宿主协议槽；真实脚手架/模型始终以Two Code任务绑定为准。
-            provider: ZCODE_AGENT_PROVIDER,
-            mode: "build",
-            model: task.lead.selection.modelLabel ?? task.lead.selection.model,
-            status:
-              task.status === "running"
-                ? "running"
-                : task.status === "error"
-                  ? "error"
-                  : "completed",
-          },
-          searchableText: task.events
-            .filter((event) => event.kind === "message")
-            .map((event) => event.text)
-            .join("\n"),
-        });
-        zcodeTaskIndexSyncer.emitWorkspaceTaskListChanged(
-          { workspacePath: task.workspacePath, taskId: meta.meta.taskId },
-          meta.meta,
-          "task_meta_changed",
-        );
-      }),
+      createTwoCodeService(
+        zcodeAgentService,
+        zcodeSessionService,
+        async (task) => {
+          const meta = await taskIndexRepo.syncTaskMetaAtGroupedTop({
+            meta: {
+              taskId: twoCodeSessionId(task.id),
+              traceId: task.id,
+              title: task.title,
+              workspacePath: task.workspacePath,
+              workspacePurpose: task.workspacePath
+                .replaceAll("\\", "/")
+                .endsWith("/.zcode/workspace/default")
+                ? "conversation"
+                : "project",
+              createdAt: Date.parse(task.events[0]?.at ?? task.updatedAt),
+              updatedAt: Date.parse(task.updatedAt),
+              // provider是旧任务索引的宿主协议槽；真实脚手架/模型始终以Two Code任务绑定为准。
+              provider: ZCODE_AGENT_PROVIDER,
+              mode: "build",
+              model: task.lead.selection.modelLabel ?? task.lead.selection.model,
+              status:
+                task.status === "running"
+                  ? "running"
+                  : task.status === "error"
+                    ? "error"
+                    : "completed",
+            },
+            searchableText: task.events
+              .filter((event) => event.kind === "message")
+              .map((event) => event.text)
+              .join("\n"),
+          });
+          zcodeTaskIndexSyncer.emitWorkspaceTaskListChanged(
+            { workspacePath: task.workspacePath, taskId: meta.meta.taskId },
+            meta.meta,
+            "task_meta_changed",
+          );
+        },
+        options?.browserControlExecutor,
+      ),
     )
     .register(IFileService, fileService)
     .register(IMediaPreviewService, mediaPreviewService)

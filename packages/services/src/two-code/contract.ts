@@ -6,6 +6,7 @@ import type {
 import type { Event } from "@zcode/rpc";
 import type { TwoCodeModelSettingsApi } from "./settings-contract.js";
 import type { TwoCodeImagesApi } from "./image-contract.js";
+export type { TwoCodeBrowserExecutor } from "./browser-contract.js";
 export { twoCodeForkPoints } from "./domain/fork-points.js";
 export {
   modelThinkingProfiles,

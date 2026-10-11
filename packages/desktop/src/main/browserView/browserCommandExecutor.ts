@@ -24,6 +24,7 @@ import {
 import { now, readState } from "./browserCommandState.js";
 import type { ControlledView } from "./browserCommandTypes.js";
 import { handlePlaywrightAction } from "./browserPlaywrightExecutor.js";
+import { refNotFound } from "./browserCommandResult.js";
 
 export { isAllowedBrowserUrl } from "./browserCommandState.js";
 export type {
@@ -35,7 +36,7 @@ export type {
 
 /**
  * 核心子集：navigate / getState / screenshot / snapshot / click / type / press / scroll；
- * 其余（fill/waitFor/capabilities）返回 capability_unsupported；playwrightWaitForTimeout 由
+ * 其余（waitFor/capabilities）返回 capability_unsupported；playwrightWaitForTimeout 由
  * BrowserGuestManager 在校验 scope/tab 后处理，不进入页面 executor。
  * 抛错结构化返回，不 throw（保证 host↔main 桥能拿到结果）。
  */
@@ -73,6 +74,30 @@ export async function executeBrowserCommandOnView(
         return await handleClick(view, command, done);
       case "type":
         return await handleType(view, command, done);
+      case "fill": {
+        // 实测直接fill一直返回unsupported；从真实ref解析目标后复用原生locator.fill，
+        // 避免模型自行拼click/type导致追加旧值，也不另写一套粘贴/焦点处理。
+        const selector = await view.webContents.executeJavaScript(`(() => {
+          let element = window.__zcodeRefs?.get(${JSON.stringify(command.ref)});
+          if (!element?.isConnected) return null;
+          const parts = [];
+          while (element && element.nodeType === 1) {
+            let index = 1;
+            for (let sibling = element.previousElementSibling; sibling; sibling = sibling.previousElementSibling)
+              if (sibling.localName === element.localName) index++;
+            parts.unshift(element.localName + '[' + index + ']');
+            element = element.parentElement;
+          }
+          return 'xpath=/' + parts.join('/');
+        })()`);
+        if (typeof selector !== "string") return done(refNotFound(command.ref));
+        return await handlePlaywrightAction(
+          view,
+          { name: "locator", selector, operation: "fill", value: command.value },
+          done,
+          opts?.signal,
+        );
+      }
       case "press":
         return await handlePress(view, command, done);
       case "cuaKeypress":
@@ -100,7 +125,7 @@ export async function executeBrowserCommandOnView(
       case "playwright":
         return await handlePlaywrightAction(view, command.action, done, opts?.signal);
       default:
-        // fill/waitFor/capabilities/getDialog/handleDialog/close/list/playwrightWaitForTimeout
+        // waitFor/capabilities/getDialog/handleDialog/close/list/playwrightWaitForTimeout
         // 未在本 executor 实现（由 manager 层或后续增量处理）。
         return done({
           ok: false,

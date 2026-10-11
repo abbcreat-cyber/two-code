@@ -16,11 +16,14 @@ import { JsonPreferences } from "./preferences.js";
 import { TwoCodeConnections } from "./connections.js";
 import { storeImage, readStoredImage } from "./vision.js";
 import { forkNativeActors } from "./native-fork.js";
+import type { TwoCodeBrowserExecutor } from "../browser-contract.js";
+import { executeTaskBrowser } from "./browser.js";
 
 export function createTwoCodeService(
   agent: IZCodeAgentService,
   sessions: IZCodeSessionService,
   projectTask?: (task: TwoCodeTask) => Promise<void>,
+  browserExecutor?: TwoCodeBrowserExecutor,
 ): ITwoCodeService {
   const root =
     process.env.TWO_CODE_HOME ??
@@ -28,6 +31,12 @@ export function createTwoCodeService(
   const connections = new TwoCodeConnections(root);
   const preferences = new JsonPreferences(root);
   const coordinator = new TwoCodeCoordinator({
+    ...(browserExecutor
+      ? {
+          browser: (task, command, signal) =>
+            executeTaskBrowser(browserExecutor, task, command, signal),
+        }
+      : {}),
     forkActors: (task, at, id) => forkNativeActors(task, at, join(root, "sessions", id)),
     connections: (task) => connections.freeze(task),
     lease: new TaskLease(root),

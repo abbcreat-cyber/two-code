@@ -2,6 +2,8 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
+桌面Host可通过TwoCodeBrowserExecutor注入已有内置浏览器端口。Step/Pi/Claude公开browser工具，以同一two-code任务scope操作Main拥有的标签页；只读和变更动作分别裁决，取消/换run后拒绝迟到结果。未注入则不公开工具，不改走外部浏览器；详见embedded-browser规格。
+
 fork在源任务执行租约内从已成功回答边界创建新任务，主副手原生会话身份均独立，历史截断，权限/请求ID/分支用量清空，工作区文件不回滚。forkSource持久保存幂等来源；UI复用回答的叉子按钮。原生记录不能确认边界时显式失败，不用摘要代替原生上下文，见session-fork规格。
 
 准入前拒绝通过原生调用ID关联notExecuted及verification.status=not-executed，不写进程退出码/输出。Claude的PreToolUse/canUseTool两个入口共享去重；后到消息不复活已拒绝工具。明确interrupted仅表示中断，不代表未执行或已回滚。主手回执和原工具详情使用同一事件日志，见collaboration-control规格。
