@@ -109,6 +109,11 @@ export function toolCallRowToLegacyNode(row: ToolCallRow): TaskChatToolCallTreeN
       ...(row.toolCallId.startsWith("two-code:") && row.progress?.previewLine
         ? { title: row.progress.previewLine }
         : {}),
+      ...(row.toolCallId.startsWith("two-code:native:") &&
+      row.status === "cancelled" &&
+      row.output?.text.startsWith("未执行")
+        ? { title: row.output.text }
+        : {}),
       // kind 兼容旧聚合分类：v4 下没有旧 ZCode Agent 快照形态，直接用固定工具名。
       kind: row.toolName,
       input: inputPreview.input,

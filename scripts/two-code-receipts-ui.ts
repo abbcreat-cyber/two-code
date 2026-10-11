@@ -31,6 +31,13 @@ for (const [title, file] of [
       : "D:/Apps/TwoCode/qa/efficiency-receipts-final-1791699869596/failure-2.json",
   ],
   ...(process.env.TWO_CODE_WARNING_TASK ? [["警告回执", process.env.TWO_CODE_WARNING_TASK]] : []),
+  ...(process.env.TWO_CODE_DENIED_TASK ? [["副手拒绝", process.env.TWO_CODE_DENIED_TASK]] : []),
+  ...(process.env.TWO_CODE_INTERRUPTED_TASK
+    ? [["执行中断", process.env.TWO_CODE_INTERRUPTED_TASK]]
+    : []),
+  ...(process.env.TWO_CODE_LEAD_DENIED_TASK
+    ? [["主手拒绝", process.env.TWO_CODE_LEAD_DENIED_TASK]]
+    : []),
 ]) {
   const original = JSON.parse(await fs.readFile(file!, "utf8"));
   const created = await service.create({
@@ -94,25 +101,36 @@ try {
       .filter({ hasText: /已工作/ })
       .all())
       if ((await b.getAttribute("aria-expanded")) !== "true") await b.click();
-    const row = page.locator('[data-tool-name="sidekick"]').first();
+    const leadDenied = task.title === "主手拒绝";
+    const target = page.locator(
+      leadDenied ? '[data-tool-name="powershell"]' : '[data-tool-name="sidekick"]',
+    );
+    if (leadDenied) assert.equal(await target.count(), 1, "拒绝消息不应产生重复工具行");
+    const row = target.first();
     await row.waitFor();
     const trigger = row.locator('[data-testid^="tool-summary-trigger"]').first();
     await trigger.click();
     await page
-      .getByText(/原生执行回执/)
+      .getByText(leadDenied ? /未执行：本次操作未获批准/ : /原生执行回执/)
       .first()
       .waitFor();
     const body = await row.innerText();
-    assert(body.includes("原生执行回执"), "回执必须位于原版副手工具详情内");
+    assert(body.includes(leadDenied ? "未执行" : "原生执行回执"), "状态必须位于原工具详情内");
     assert(
       body.includes(
-        task.title === "成功回执"
-          ? "3 checks passed"
-          : task.title === "警告回执"
-            ? "WARN: optional fixture notice"
-            : historyRoot
-              ? "FAIL: fixture"
-              : "FAIL: intentional fixture",
+        leadDenied
+          ? "未执行"
+          : task.title === "副手拒绝"
+            ? "not-executed"
+            : task.title === "执行中断"
+              ? "interrupted"
+              : task.title === "成功回执"
+                ? "3 checks passed"
+                : task.title === "警告回执"
+                  ? "WARN: optional fixture notice"
+                  : historyRoot
+                    ? "FAIL: fixture"
+                    : "FAIL: intentional fixture",
       ),
     );
     await row.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });

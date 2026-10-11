@@ -28,7 +28,7 @@ const sub = service.onDidChange((task) => {
     const allow =
       p.role === "sidekick" &&
       p.title === "PowerShell" &&
-      String(args.command).replaceAll("\\", "/").includes(`${cwd}/wait.mjs`);
+      [`node '${cwd}/wait.mjs'`, `node "${cwd}/wait.mjs"`].includes(String(args.command));
     void service.respond({ taskId: task.id, permissionId: p.id, allow }).catch(() => {});
   }
 });
@@ -88,16 +88,20 @@ try {
             await service.submit({
               taskId: task.id,
               requestId: randomUUID(),
-              text: `仅限${cwd}，不用联网、GUI或技能。让唯一副手用原生PowerShell执行一次 node '${cwd}/wait.mjs'，run_in_background为false；主手阻塞等待报告。不要读取/修改脚本，不重试，不使用其他工具。`,
+              text: `仅限${cwd}，不用联网、GUI或技能。让唯一副手用原生PowerShell精确执行命令 node '${cwd}/wait.mjs'，command必须逐字保持此字符串，不添加计时/退出码采集或任何前后缀。run_in_background为false；主手阻塞等待报告。不要读取/修改脚本，不重试，不使用其他工具，不要求报告耗时。`,
             });
-            await until(
-              async () =>
+            await until(async () => {
+              if (
                 await fs.access(`${cwd}/started.txt`).then(
                   () => true,
                   () => false,
-                ),
-              90000,
-            );
+                )
+              )
+                return true;
+              if ((await service.read(task.id)).status !== "running")
+                throw Error("未进入等待脚本，目标改向场景没有被触发");
+              return false;
+            }, 90000);
             const before = await service.read(task.id),
               started = Date.now();
             const update = {
@@ -119,6 +123,21 @@ try {
             );
             assert(done.events.some((e) => e.kind === "handoff_update"));
             assert(done.events.some((e) => e.continuation));
+            const interrupted = done.events.find(
+              (e) =>
+                e.role === "sidekick" &&
+                e.kind === "verification" &&
+                JSON.parse(e.text).status === "interrupted",
+            );
+            assert(interrupted, "运行中改向应回报中断，而非执行失败或未执行");
+            assert(
+              done.events.some(
+                (e) =>
+                  e.kind === "tool_end" &&
+                  e.toolCallId === interrupted.toolCallId &&
+                  e.text === "interrupted",
+              ),
+            );
             const remaining = 46000 - (Date.now() - started);
             if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
             await assert.rejects(fs.access(`${cwd}/late.txt`));

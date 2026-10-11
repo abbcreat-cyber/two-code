@@ -53,6 +53,15 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       }
     }
     // 直接投影原生reasoning行，让原有“已工作”和思考显示设置拥有折叠交互。
+    // SDK拒绝可能先到，随后出现参数流时用同一原生工具行替换早期标记，不能重复或丢拒绝事实。
+    if (event.kind === "tool_input" && event.toolCallId) {
+      const early = toolActivities.get(event.toolCallId);
+      if (early) {
+        const index = rows.indexOf(early);
+        if (index >= 0) rows.splice(index, 1);
+        toolActivities.delete(event.toolCallId);
+      }
+    }
     if (nativeTools.apply(event, turnId, rows, handoff)) {
       message = undefined;
       continue;

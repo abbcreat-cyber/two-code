@@ -17,6 +17,81 @@ const base: TwoCodeTask = {
   events: [],
 };
 
+test("拒绝早于工具参数时只保留一行未执行，迟到终态不能改成成功", () => {
+  const task = structuredClone(base);
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "运行" },
+    {
+      seq: 2,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool",
+      text: "PowerShell · 未执行：未获批准",
+      toolCallId: "d",
+      notExecuted: true,
+    },
+    {
+      seq: 3,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_input",
+      text: JSON.stringify({ tool: "PowerShell", characters: 4, bytes: 4 }),
+      toolCallId: "d",
+    },
+    {
+      seq: 4,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_end",
+      text: "not-executed",
+      toolCallId: "d",
+      notExecuted: true,
+    },
+    {
+      seq: 5,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_end",
+      text: "success",
+      toolCallId: "d",
+    },
+  ];
+  const rows = projectTwoCodeRows(task),
+    tools = rows.filter((r) => r.kind === "toolCall");
+  assert.equal(tools.length, 1);
+  assert.equal(tools[0]!.status, "cancelled");
+  assert.match(tools[0]!.output!.text, /未执行/);
+  assert.equal(rows.filter((r) => r.kind === "timelineMarker").length, 0);
+  rows.forEach((r) => conversationRowSchema.parse(r));
+});
+test("原生中断不能显示未执行，也不当作成功完成", () => {
+  const task = structuredClone(base);
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "运行" },
+    {
+      seq: 2,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_input",
+      text: JSON.stringify({ tool: "PowerShell", characters: 4, bytes: 4 }),
+      toolCallId: "i",
+    },
+    { seq: 3, at: task.updatedAt, role: "lead", kind: "tool", text: "PowerShell", toolCallId: "i" },
+    {
+      seq: 4,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_end",
+      text: "interrupted",
+      toolCallId: "i",
+    },
+  ];
+  const row = projectTwoCodeRows(task).find((r) => r.kind === "toolCall")!;
+  assert.equal(row.status, "cancelled");
+  assert.match(row.output!.text, /中断/);
+  assert(!row.output!.text.includes("未执行"));
+});
+
 test("工具参数生成显示原工具行，执行前不标成功，中断和刷新可恢复", () => {
   const task = structuredClone(base);
   task.events = [

@@ -1,4 +1,5 @@
 import type { EngineEvent } from "../app/ports.js";
+import { rejectedToolEvent } from "./tool-outcome.js";
 const obj = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 interface Draft {
@@ -57,7 +58,13 @@ export class NativeToolProgress {
     if (record.type === "tool_execution_end") {
       const id = String(record.toolCallId ?? "");
       if (!this.drafts.delete(id)) return;
-      return { kind: "tool_end", toolCallId: id, text: record.isError ? "error" : "success" };
+      const denied = rejectedToolEvent(record)?.event.notExecuted === true;
+      return {
+        kind: "tool_end",
+        toolCallId: id,
+        text: denied ? "not-executed" : record.isError ? "error" : "success",
+        ...(denied ? { notExecuted: true } : {}),
+      };
     }
     if (record.type !== "message_update") return;
     const d = obj(record.assistantMessageEvent);

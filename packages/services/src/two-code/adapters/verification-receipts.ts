@@ -1,5 +1,6 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { EngineEvent } from "../app/ports.js";
+import { rejectedToolEvent } from "./tool-outcome.js";
 
 const object = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" ? (v as Record<string, unknown>) : {};
@@ -18,10 +19,11 @@ export function verificationEvent(
   result: unknown,
   isError: boolean,
   interrupted = false,
+  notExecuted = false,
 ): EngineEvent | undefined {
   if (!["powershell", "bash", "run_command", "execute_command"].includes(tool.toLowerCase()))
     return;
-  const text = textOf(result),
+  const text = notExecuted ? "" : textOf(result),
     match = /(?:^|\n)\s*(?:EXIT(?:CODE)?|Exit code)\s*[:=]\s*(-?\d+)\s*(?:$|\n)/i.exec(text);
   const exitCode = match ? Number(match[1]) : undefined;
   const summaries = text
@@ -41,7 +43,13 @@ export function verificationEvent(
     toolCallId: id,
     text: JSON.stringify({
       tool,
-      status: interrupted ? "interrupted" : isError ? "failed" : "completed",
+      status: notExecuted
+        ? "not-executed"
+        : interrupted
+          ? "interrupted"
+          : isError
+            ? "failed"
+            : "completed",
       ...(exitCode !== undefined ? { reportedExitCode: exitCode } : {}),
       summaries,
       outputCoverage: "selected-lines",
@@ -55,13 +63,33 @@ export function nativeVerificationEvent(record: Record<string, unknown>): Engine
     String(record.toolCallId ?? ""),
     record.result,
     record.isError === true,
+    false,
+    rejectedToolEvent(record)?.event.notExecuted === true,
   );
 }
 /** SDK助手的tool_use和原生user.tool_result配对；不依赖副手最终总结。 */
 export class ClaudeReceiptTracker {
   private names = new Map<string, string>();
   private done = new Set<string>();
+  private deniedCalls = new Set<string>();
+  private interruptCalls = new Set<string>();
   constructor(private emit: (event: EngineEvent) => Promise<void>) {}
+  interruptRequested() {
+    // 原生改向可能在interrupt应答前发回结果；只关联请求时尚未结束的调用。
+    for (const id of this.names.keys()) if (!this.done.has(id)) this.interruptCalls.add(id);
+  }
+  /** 准入回调比SDK消息流更早到达也有效；只有明确拒绝才证明工具未执行。 */
+  async denied(tool: string, id: string) {
+    if (this.done.has(id) || this.deniedCalls.has(id)) return;
+    this.deniedCalls.add(id);
+    this.names.set(id, tool);
+    await this.emit({
+      kind: "tool",
+      toolCallId: id,
+      notExecuted: true,
+      text: `${tool} · 未执行：本次操作未获批准`,
+    });
+  }
   async observe(message: SDKMessage) {
     if (message.type === "assistant")
       for (const b of message.message.content)
@@ -73,17 +101,31 @@ export class ClaudeReceiptTracker {
       for (const b of message.message.content)
         if (b.type === "tool_result" && !this.done.has(b.tool_use_id)) {
           this.done.add(b.tool_use_id);
+          const notExecuted = this.deniedCalls.has(b.tool_use_id);
+          const interrupted =
+            object(message.tool_use_result).interrupted === true ||
+            (this.interruptCalls.has(b.tool_use_id) &&
+              b.is_error === true &&
+              message.tool_use_result === "User rejected tool use");
           await this.emit({
             kind: "tool_end",
             toolCallId: b.tool_use_id,
-            text: b.is_error ? "error" : "success",
+            text: notExecuted
+              ? "not-executed"
+              : interrupted
+                ? "interrupted"
+                : b.is_error
+                  ? "error"
+                  : "success",
+            ...(notExecuted ? { notExecuted: true } : {}),
           });
           const event = verificationEvent(
             this.names.get(b.tool_use_id) ?? "",
             b.tool_use_id,
             b.content,
             b.is_error === true,
-            object(message.tool_use_result).interrupted === true,
+            interrupted,
+            notExecuted,
           );
           if (event) await this.emit(event);
         }

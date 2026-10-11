@@ -5,6 +5,7 @@ import type { ConversationRow, ToolCallRow } from "@zcode/shared/zcode-protocol-
 /** 展示直接派生原生调用ID和事件，不另建运行状态。副手草稿留在既有交接详情内。 */
 export class NativeToolRows {
   private entries = new Map<string, { row: ToolCallRow; parent?: ToolCallRow; hidden?: boolean }>();
+  private denied = new Set<string>();
   handoff(turnId: string, rows: ConversationRow[]) {
     for (const entry of this.entries.values()) {
       if (entry.row.turnId !== turnId || entry.row.toolName !== "sidekick") continue;
@@ -17,6 +18,7 @@ export class NativeToolRows {
   apply(event: TaskEvent, turnId: string, rows: ConversationRow[], parent?: ToolCallRow): boolean {
     if (!event.toolCallId) return false;
     const key = `${turnId}:${event.role}:${event.toolCallId}`;
+    if (event.notExecuted) this.denied.add(key);
     let entry = this.entries.get(key);
     if (event.kind === "tool_input") {
       let draft: {
@@ -40,8 +42,9 @@ export class NativeToolRows {
           kind: "toolCall",
           toolCallId: `two-code:native:${key}`,
           toolName: draft.tool,
-          status: "inputStreaming",
+          status: this.denied.has(key) ? "cancelled" : "inputStreaming",
           inputText: "",
+          ...(this.denied.has(key) ? { output: { text: "未执行：本次操作未获批准" } } : {}),
         };
         entry = { row, parent: event.role === "sidekick" ? parent : undefined };
         this.entries.set(key, entry);
@@ -74,12 +77,18 @@ export class NativeToolRows {
       return !entry.parent;
     }
     if (event.kind === "tool_end") {
-      if (row.status !== "cancelled") row.status = event.text === "success" ? "success" : "error";
+      if (this.denied.has(key)) row.status = "cancelled";
+      else if (event.text === "interrupted") {
+        row.status = "cancelled";
+        row.output = { text: "原生工具已中断；此前执行情况及副作用需以实际证据确认。" };
+      } else if (row.status !== "cancelled")
+        row.status = event.text === "success" ? "success" : "error";
       row.endedAt = Date.parse(event.at);
       row.progress = undefined;
       row.output = {
-        text:
-          row.status === "success"
+        text: this.denied.has(key)
+          ? "未执行：本次操作未获批准"
+          : row.status === "success"
             ? "原生工具已完成。"
             : row.status === "error"
               ? "原生工具返回失败。"

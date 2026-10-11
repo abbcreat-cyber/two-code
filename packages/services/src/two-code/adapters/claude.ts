@@ -31,6 +31,7 @@ export class ClaudeAdapter implements HarnessAdapter {
   private updateReady?: ReturnType<typeof Promise.withResolvers<void>>;
   private generation = 0;
   private runSignal?: AbortSignal;
+  private receipts?: ClaudeReceiptTracker;
   async run(input: EngineRun): Promise<EngineReport> {
     this.generation++;
     this.runSignal = input.signal;
@@ -62,6 +63,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     await input.emit({ kind: "session", text: sessionId });
     const tools = claudeTools(input),
       receipts = new ClaudeReceiptTracker(input.emit);
+    this.receipts = receipts;
     const effort = ["low", "medium", "high", "xhigh", "max"].includes(
       input.selection.thinking ?? "",
     )
@@ -137,6 +139,7 @@ export class ClaudeAdapter implements HarnessAdapter {
                       event.tool_name,
                       JSON.stringify(event.tool_input),
                     );
+                    if (!allow) await receipts.denied(event.tool_name, event.tool_use_id);
                     return {
                       hookSpecificOutput: {
                         hookEventName: "PreToolUse",
@@ -183,8 +186,9 @@ export class ClaudeAdapter implements HarnessAdapter {
                 },
               }
             : {}),
-          canUseTool: async (name, args) => {
+          canUseTool: async (name, args, context) => {
             const allowed = await input.permission(name, JSON.stringify(args, null, 2));
+            if (!allowed) await receipts.denied(name, context.toolUseID);
             return allowed
               ? { behavior: "allow", updatedInput: args }
               : { behavior: "deny", message: permissionDenied(input, name, JSON.stringify(args)) };
@@ -288,6 +292,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       this.active?.close();
       await connection.close();
       this.active = undefined;
+      this.receipts = undefined;
       this.child = undefined;
     }
   }
@@ -305,6 +310,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       const active = this.active,
         inbox = this.inbox;
       try {
+        this.receipts?.interruptRequested();
         const receipt = await active.interrupt();
         if (generation !== this.generation || this.active !== active)
           throw new Error("原交接已结束，不能将更新送入后续交接");

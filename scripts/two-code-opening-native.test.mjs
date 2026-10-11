@@ -122,7 +122,7 @@ for (const scenario of ["normal", "optout", "cancel", "silent"])
       } else if (scenario === "silent") {
         await assert.rejects(promise);
         assert.equal(requests.length, 3);
-      assert.equal(events.filter(e => e.notExecuted).length, 2);
+        assert.equal(new Set(events.filter((e) => e.notExecuted).map((e) => e.toolCallId)).size, 2);
         await assert.rejects(fs.access(`${root}/forbidden.txt`));
       } else {
         const result = await promise;
