@@ -98,7 +98,15 @@ export class ClaudeAdapter implements HarnessAdapter {
           ...(["none", "disabled", "off"].includes(input.selection.thinking ?? "")
             ? { thinking: { type: "disabled" as const } }
             : {}),
-          systemPrompt: { type: "preset", preset: "claude_code", append: input.systemPrompt },
+          systemPrompt: {
+            type: "preset",
+            preset: "claude_code",
+            append:
+              input.systemPrompt +
+              (process.platform === "win32"
+                ? "\n执行PowerShell脚本时，优先使用当前提供的原生PowerShell工具，command直接填写原始脚本，不经Bash套powershell -Command。若当前CLI未提供此工具，请明确说明能力缺失，不伪称已原生执行。"
+                : ""),
+          },
           includePartialMessages: true,
           ...(connectionEnv ? { settings: { env: connectionEnv } } : {}),
           permissionMode:

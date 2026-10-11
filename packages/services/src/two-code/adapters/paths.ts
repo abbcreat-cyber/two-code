@@ -45,6 +45,14 @@ export async function piEntry(): Promise<string | undefined> {
     ]),
   ]);
 }
+export async function stepExecutable(): Promise<string | undefined> {
+  const name = process.platform === "win32" ? "step.exe" : "step";
+  return existingPath([
+    process.env.TWO_CODE_STEP_CLI ?? "",
+    join(homedir(), ".stepcode", "bin", name),
+    ...(process.env.PATH ?? "").split(delimiter).map((root) => join(root, name)),
+  ]);
+}
 export async function piConfiguredModels() {
   try {
     const config = JSON.parse(

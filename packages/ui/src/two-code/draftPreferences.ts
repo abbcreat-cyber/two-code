@@ -14,7 +14,7 @@ export function readDraftPreferences(
       [value.lead, value.sidekick].every(
         (role) =>
           role &&
-          ["pi", "claude-code", "zcode"].includes(role.harness) &&
+          ["pi", "claude-code", "zcode", "step-code"].includes(role.harness) &&
           [role.provider, role.model, role.modelLabel, role.thinking].every(
             (field) => field === undefined || (typeof field === "string" && field.length <= 300),
           ),

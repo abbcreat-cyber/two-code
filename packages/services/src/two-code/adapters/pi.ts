@@ -3,8 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { EngineRun, EngineReport, HarnessAdapter } from "../app/ports.js";
-import { piEntry } from "./paths.js";
-import { ToolBridge, piToolExtension } from "./tool-bridge.js";
+import { piEntry, stepExecutable } from "./paths.js";
+import { ToolBridge, piToolExtension, stepToolExtension } from "./tool-bridge.js";
 import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { subscriptionEnvironment } from "./chatgpt-subscription.js";
 import { piThinkingLevel } from "../domain/thinking.js";
@@ -27,6 +27,10 @@ interface Pending {
 }
 
 export class PiAdapter implements HarnessAdapter {
+  constructor(private readonly harness: "pi" | "step-code" = "pi") {}
+  private get label() {
+    return this.harness === "step-code" ? "Step Code" : "Pi";
+  }
   private child?: ChildProcessWithoutNullStreams;
   private bridge?: ToolBridge;
   private readonly pending = new Map<string, Pending>();
@@ -36,13 +40,16 @@ export class PiAdapter implements HarnessAdapter {
   private buffer = "";
   private failure?: Error;
   private async start(input: EngineRun): Promise<void> {
-    const entry = await piEntry();
-    if (!entry) throw new Error("未找到 Pi CLI，请安装或配置 TWO_CODE_PI_CLI");
+    const step = this.harness === "step-code";
+    const entry = step ? await stepExecutable() : await piEntry();
+    if (!entry) throw new Error(`未找到 ${this.label} CLI，请安装或配置对应底座路径`);
+    if (step && (!input.connection || !input.selection.provider))
+      throw new Error("请选择Step Code的API或订阅连接，不会回退到其他渠道");
     await mkdir(input.sessionDir, { recursive: true });
     const promptFile = join(input.sessionDir, "two-code-instructions.txt");
     await writeFile(promptFile, input.systemPrompt, "utf8");
     const args = [
-      entry,
+      ...(step ? [] : [entry]),
       "--mode",
       "rpc",
       "--session-dir",
@@ -55,6 +62,8 @@ export class PiAdapter implements HarnessAdapter {
       "--no-themes",
       "--no-approve",
     ];
+    // 工具必须经过下方已验证的Two Code权限扩展；不弹第二层重复审批。
+    if (step) args.push("--approval-mode", "auto", "--non-interactive-approval", "deny");
     if (input.sessionId) args.push("--session", input.sessionId);
     if (input.selection.provider)
       args.push("--provider", input.connection?.subscription ? "openai" : input.selection.provider);
@@ -77,18 +86,24 @@ export class PiAdapter implements HarnessAdapter {
           providers: { [input.selection.provider]: input.connection.providerConfig },
         }),
       );
-      connectionEnvironment = { PI_CODING_AGENT_DIR: configDir };
+      if (step) {
+        const agentDir = join(configDir, "agent");
+        await mkdir(agentDir, { recursive: true });
+        connectionEnvironment = { STEP_CODING_AGENT_DIR: agentDir, STEPCODE_CONFIG_DIR: configDir };
+      } else connectionEnvironment = { PI_CODING_AGENT_DIR: configDir };
     }
     {
       this.bridge = new ToolBridge(input);
       await this.bridge.start();
       const extension = join(input.sessionDir, "two-code-tools.mjs");
-      await writeFile(extension, piToolExtension, "utf8");
+      await writeFile(extension, step ? stepToolExtension : piToolExtension, "utf8");
       args.push("--extension", extension);
       toolEnvironment = this.bridge.environment;
     }
     this.child = spawn(
-      input.connection?.subscription?.node ?? process.env.TWO_CODE_NODE ?? process.execPath,
+      step
+        ? entry
+        : (input.connection?.subscription?.node ?? process.env.TWO_CODE_NODE ?? process.execPath),
       args,
       {
         cwd: input.cwd,
@@ -114,14 +129,16 @@ export class PiAdapter implements HarnessAdapter {
     this.child.once("error", (error) => this.fail(error));
     this.child.once("exit", (code) =>
       this.fail(
-        new Error(`Pi 进程退出 (${code})${this.stderr ? `：${this.stderr.slice(-1500)}` : ""}`),
+        new Error(
+          `${this.label} 进程退出 (${code})${this.stderr ? `：${this.stderr.slice(-1500)}` : ""}`,
+        ),
       ),
     );
   }
   private parse(chunk: string): void {
     this.buffer += chunk;
     if (this.buffer.length > 8 * 1024 * 1024) {
-      this.fail(new Error("Pi 协议行超过限制"));
+      this.fail(new Error(`${this.label} 协议行超过限制`));
       return;
     }
     while (this.buffer.includes("\n")) {
@@ -137,7 +154,7 @@ export class PiAdapter implements HarnessAdapter {
           this.pending.delete(record.id);
           clearTimeout(pending.timer);
           if (record.success === true) pending.resolve(object(record.data));
-          else pending.reject(new Error(String(record.error ?? "Pi 命令被拒绝")));
+          else pending.reject(new Error(String(record.error ?? `${this.label} 命令被拒绝`)));
         } else this.onRecord?.(record);
       } catch (error) {
         this.fail(error instanceof Error ? error : new Error(String(error)));
@@ -159,7 +176,7 @@ export class PiAdapter implements HarnessAdapter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Pi ${type} 未确认，不能假定已完成`));
+        reject(new Error(`${this.label} ${type} 未确认，不能假定已完成`));
       }, 30000);
       this.pending.set(id, { resolve, reject, timer });
       this.child?.stdin.write(JSON.stringify({ id, type, ...values }) + "\n", (error) => {
@@ -171,6 +188,16 @@ export class PiAdapter implements HarnessAdapter {
     input.signal.throwIfAborted();
     if (this.child) await this.close();
     await this.start(input);
+    const registered = await this.request("get_commands");
+    if (
+      !Array.isArray(registered.commands) ||
+      !registered.commands.some(
+        (command: Json) =>
+          command.name === "two-code-tool-bridge" &&
+          command.description === "Two Code permission and sidekick bridge v1",
+      )
+    )
+      throw new Error(`${this.label} 权限扩展未加载，拒绝启动模型任务`);
     const state = await this.request("get_state");
     const sessionId = typeof state.sessionFile === "string" ? state.sessionFile : input.sessionId;
     if (sessionId) await input.emit({ kind: "session", text: sessionId });
@@ -258,7 +285,7 @@ export class PiAdapter implements HarnessAdapter {
       } else if (record.type === "extension_ui_request") {
         void input
           .permission(
-            String(record.title ?? "Pi 请求"),
+            String(record.title ?? `${this.label} 请求`),
             String(record.message ?? record.method ?? "确认"),
           )
           .then((confirmed) =>
@@ -277,17 +304,18 @@ export class PiAdapter implements HarnessAdapter {
     };
     const abort = () => {
       void this.cancel();
-      rejectRun(new Error("Pi 任务已停止"));
+      rejectRun(new Error(`${this.label} 任务已停止`));
     };
     input.signal.addEventListener("abort", abort, { once: true });
     try {
       input.signal.throwIfAborted();
       const ack = await this.request("prompt", { message: input.prompt });
-      if (ack.disposition === "handled") throw new Error("Pi 处理了命令，但未启动模型任务");
+      if (ack.disposition === "handled")
+        throw new Error(`${this.label} 处理了命令，但未启动模型任务`);
       await settled;
       if (usage.steps) await input.usage?.({ ...usage });
       input.signal.throwIfAborted();
-      if (!text) throw new Error("Pi 已结束，但没有可读的最终回复");
+      if (!text) throw new Error(`${this.label} 已结束，但没有可读的最终回复`);
       const finalState = await this.request("get_state");
       return {
         text,

@@ -11,7 +11,7 @@ export interface ConnectionModel {
 export interface HarnessConnection {
   authentication?: "chatgpt";
   id: string;
-  harness: "claude-code" | "pi";
+  harness: "claude-code" | "pi" | "step-code";
   provider: string;
   name: string;
   baseUrl: string;

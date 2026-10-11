@@ -8,8 +8,9 @@ import { TwoCodeCoordinator } from "../app/coordinator.js";
 import { JsonTaskStore } from "./json-store.js";
 import { ClaudeAdapter } from "./claude.js";
 import { PiAdapter } from "./pi.js";
+import { StepCodeAdapter } from "./step.js";
 import { ZCodeAdapter } from "./zcode.js";
-import { claudeExecutable, piEntry } from "./paths.js";
+import { claudeExecutable, piEntry, stepExecutable } from "./paths.js";
 import { TaskLease } from "./task-lease.js";
 import { JsonPreferences } from "./preferences.js";
 import { TwoCodeConnections } from "./connections.js";
@@ -36,7 +37,11 @@ export function createTwoCodeService(
       return resolved;
     },
     catalog: async (): Promise<HarnessInfo[]> => {
-      const [claude, pi] = await Promise.all([claudeExecutable(), piEntry()]);
+      const [claude, pi, step] = await Promise.all([
+        claudeExecutable(),
+        piEntry(),
+        stepExecutable(),
+      ]);
       return connections.catalog([
         {
           id: "zcode",
@@ -59,14 +64,23 @@ export function createTwoCodeService(
           detail: pi ? "原生 RPC；沿用模型配置，工具按 Pi 默认语义执行" : "未找到 Pi CLI",
           models: [],
         },
+        {
+          id: "step-code",
+          name: "Step Code",
+          available: !!step,
+          detail: step ? "原生Step RPC；API和订阅独立选择" : "未找到Step Code CLI",
+          models: [],
+        },
       ]);
     },
     createAdapter: (harness) =>
       harness === "claude-code"
         ? new ClaudeAdapter()
-        : harness === "pi"
-          ? new PiAdapter()
-          : new ZCodeAdapter(agent, sessions),
+        : harness === "step-code"
+          ? new StepCodeAdapter()
+          : harness === "pi"
+            ? new PiAdapter()
+            : new ZCodeAdapter(agent, sessions),
   });
   const service: ITwoCodeService = Object.assign(coordinator, {
     modelSettings: () => connections.read(),

@@ -23,6 +23,11 @@ export async function permissionDecision(
   if (
     [
       "read",
+      "read_file",
+      "list_directory",
+      "find_files",
+      "search_files",
+      "search_web",
       "grep",
       "glob",
       "find",
@@ -38,7 +43,10 @@ export async function permissionDecision(
   )
     return "allow";
   if (mode === "plan") return "deny";
-  if (mode === "edit" && ["write", "edit", "multiedit", "notebookedit"].includes(name)) {
+  if (
+    mode === "edit" &&
+    ["write", "edit", "write_file", "edit_file", "multiedit", "notebookedit"].includes(name)
+  ) {
     try {
       const args = JSON.parse(detail);
       const file = args.file_path ?? args.path ?? args.notebook_path;

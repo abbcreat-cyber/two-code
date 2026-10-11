@@ -1,4 +1,20 @@
 import test from "node:test";
+test("Step Code草稿恢复保留API与订阅身份，不回退为默认模型", () => {
+  const draft = {
+    dual: true,
+    lead: { harness: "step-code" as const, provider: "step-api", model: "step-5-preview" },
+    sidekick: { harness: "step-code" as const, provider: "step-plan", model: "step-5-preview" },
+  };
+  const store = { getItem: () => JSON.stringify(draft), setItem: () => {}, removeItem: () => {} };
+  assert.deepEqual(
+    readDraftPreferences(store, "draft", {
+      dual: false,
+      lead: { harness: "pi" },
+      sidekick: { harness: "pi" },
+    }),
+    draft,
+  );
+});
 import assert from "node:assert/strict";
 import {
   readDraftPreferences,

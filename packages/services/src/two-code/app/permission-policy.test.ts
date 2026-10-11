@@ -9,6 +9,11 @@ test("all four modes enforce reads, edits, shells and workspace boundaries", asy
   await mkdir(cwd, { recursive: true });
   for (const mode of ["plan", "build", "edit", "yolo"] as const) {
     assert.equal(await decide(mode, "Read", "{}", cwd), "allow");
+    assert.equal(await decide(mode, "read_file", "{}", cwd), "allow");
+    assert.equal(
+      await decide(mode, "powershell", "{}", cwd),
+      mode === "plan" ? "deny" : mode === "yolo" ? "allow" : "ask",
+    );
     assert.equal(
       await decide(mode, "Write", JSON.stringify({ file_path: "test.txt" }), cwd),
       mode === "plan" ? "deny" : mode === "build" ? "ask" : "allow",

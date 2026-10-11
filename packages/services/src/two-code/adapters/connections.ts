@@ -34,7 +34,7 @@ const model = z
 const connection = z.object({
   subscription: subscriptionSchema.optional(),
   id: z.string().min(1).max(300),
-  harness: z.enum(["claude-code", "pi"]),
+  harness: z.enum(["claude-code", "pi", "step-code"]),
   provider: z.string().max(300),
   name: z.string().trim().min(1).max(300),
   baseUrl: z.string().max(2000),
@@ -229,6 +229,7 @@ export class TwoCodeConnections {
     if (!c) throw new Error("所选连接已移除，请在模型设置中重新选择");
     if (
       !c.subscription &&
+      c.harness !== "step-code" &&
       !state.connections.some((saved) => saved.id === c.id) &&
       !(c.harness === "pi" && c.models.some((m) => findModelThinkingProfile(m.id, m.name)))
     )

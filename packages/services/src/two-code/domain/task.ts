@@ -25,7 +25,7 @@ export function reconfigureTask(task: TwoCodeTask, preferences: TwoCodePreferenc
 }
 
 export function validateSelection(selection: EngineSelection): void {
-  if (!selection || !["zcode", "claude-code", "pi"].includes(selection.harness)) {
+  if (!selection || !["zcode", "claude-code", "pi", "step-code"].includes(selection.harness)) {
     throw new Error("请选择有效脚手架");
   }
   if (selection.harness === "zcode" && Boolean(selection.model) !== Boolean(selection.provider)) {

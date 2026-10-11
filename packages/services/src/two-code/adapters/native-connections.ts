@@ -2,12 +2,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { HarnessConnection } from "../contract.js";
-export interface PrivateConnection extends Omit<HarnessConnection, "hasApiKey" | "source"> {
-  subscription?: { agentDir: string; node: string; proxy: string };
-  apiKey: string;
-  authMode?: "token" | "api-key";
-  providerConfig?: Record<string, unknown>;
-}
+import { stepConnections } from "./step-connections.js";
+import type { PrivateConnection } from "./connection-types.js";
+export type { PrivateConnection } from "./connection-types.js";
 async function readJson(file: string) {
   try {
     return JSON.parse(await readFile(file, "utf8"));
@@ -61,5 +58,5 @@ export async function nativeConnections(home = homedir()): Promise<PrivateConnec
       models: (config.models ?? []).map((m) => ({ ...m, name: m.name || m.id })),
     });
   }
-  return connections;
+  return [...connections, ...(await stepConnections(home))];
 }

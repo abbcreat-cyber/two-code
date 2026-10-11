@@ -4,7 +4,7 @@ const status = z.enum(["idle", "running", "completed", "cancelled", "error"]);
 const role = z.enum(["lead", "sidekick"]);
 const mode = z.enum(["plan", "build", "edit", "yolo"]).default("build");
 const selection = z.object({
-  harness: z.enum(["zcode", "claude-code", "pi"]),
+  harness: z.enum(["zcode", "claude-code", "pi", "step-code"]),
   provider: z.string().max(300).optional(),
   model: z.string().max(300).optional(),
   modelLabel: z.string().max(300).optional(),

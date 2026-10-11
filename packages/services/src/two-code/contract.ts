@@ -12,7 +12,7 @@ export type {
   SaveHarnessConnection,
 } from "./settings-contract.js";
 
-export type HarnessId = "zcode" | "claude-code" | "pi";
+export type HarnessId = "zcode" | "claude-code" | "pi" | "step-code";
 export type ActorRole = "lead" | "sidekick";
 export type TwoCodeMode = "plan" | "build" | "edit" | "yolo";
 export interface RunUsage {

@@ -140,11 +140,24 @@ export class ToolBridge {
 export const piToolExtension = `
 import { Type } from '@earendil-works/pi-ai';
 export default function(pi) {
+  pi.registerCommand('two-code-tool-bridge', {description:'Two Code permission and sidekick bridge v1',handler:async()=>{}});
+  const nativePowerShell = () => {
+    if (process.platform !== 'win32') return false;
+    const active = pi.getActiveTools();
+    if (!active.some(name => ['bash','run_command','powershell'].includes(name)) || !pi.getAllTools().some(tool => tool.name === 'powershell')) return false;
+    if (!active.includes('powershell')) pi.setActiveTools([...active,'powershell']);
+    return true;
+  };
+  pi.on('session_start', nativePowerShell);
+  pi.on('before_agent_start', (event) => nativePowerShell() ? {systemPrompt:event.systemPrompt+'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。'} : undefined);
   pi.on('tool_call', async (event) => {
     if (['sidekick','read_sidekick'].includes(event.toolName)) return;
-    const r = await fetch(process.env.TWO_CODE_TOOL_URL, {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN},body:JSON.stringify({name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}})});
-    const result = await r.json();
-    if (!r.ok || result.text !== 'allow') return {block:true,reason:'Two Code任务权限模式未允许此操作'};
+    if (['subagent','agent_send','workflow'].includes(event.toolName)) return {block:true,reason:'请使用Two Code管理的持久副手，不允许递归委派'};
+    try {
+      const r = await fetch(process.env.TWO_CODE_TOOL_URL, {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN},body:JSON.stringify({name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}})});
+      const result = await r.json();
+      if (!r.ok || result.text !== 'allow') return {block:true,reason:'Two Code任务权限模式未允许此操作'};
+    } catch { return {block:true,reason:'Two Code权限通道不可用，命令未执行'}; }
   });
   if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
   const call = async (name, args, signal) => {
@@ -156,3 +169,7 @@ export default function(pi) {
   pi.registerTool({name:'read_sidekick',label:'副手报告',description:'等待并读取本任务副手的报告。',parameters:Type.Object({}),execute:(id,args,signal)=>call('read_sidekick',args,signal)});
 }
 `;
+export const stepToolExtension = piToolExtension.replace(
+  "import { Type } from '@earendil-works/pi-ai';",
+  "import { Type } from 'typebox';",
+);

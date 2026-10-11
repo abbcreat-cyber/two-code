@@ -22,11 +22,13 @@ export function TwoCodeModelSettings({
   const [harness, setHarness] = useState<HarnessId>(
       () =>
         consumeHarnessSettings() ??
-        (sessionStorage.getItem("two-code:settings-harness") === "pi"
-          ? "pi"
-          : sessionStorage.getItem("two-code:settings-harness") === "claude-code"
-            ? "claude-code"
-            : "zcode"),
+        (sessionStorage.getItem("two-code:settings-harness") === "step-code"
+          ? "step-code"
+          : sessionStorage.getItem("two-code:settings-harness") === "pi"
+            ? "pi"
+            : sessionStorage.getItem("two-code:settings-harness") === "claude-code"
+              ? "claude-code"
+              : "zcode"),
     ),
     [selected, setSelected] = useState<string>(),
     [creating, setCreating] = useState<HarnessConnection>();
@@ -52,11 +54,12 @@ export function TwoCodeModelSettings({
     { id: "zcode", name: "ZCode", icon: Code2, description: "原生供应商与模型" },
     { id: "claude-code", name: "Claude Code", icon: Terminal, description: "连接与模型配置" },
     { id: "pi", name: "Pi", icon: Workflow, description: "连接与模型配置" },
+    { id: "step-code", name: "Step Code", icon: Terminal, description: "API 与订阅独立选择" },
   ] as const;
   return (
     <div className="space-y-5" data-testid="two-code-model-settings">
       <p className="text-ui-base text-foreground-subtle">选择脚手架，统一管理连接与模型。</p>
-      <div className="grid grid-cols-3 gap-3" role="tablist" aria-label="脚手架设置">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="tablist" aria-label="脚手架设置">
         {engines.map((engine) => (
           <button
             key={engine.id}
