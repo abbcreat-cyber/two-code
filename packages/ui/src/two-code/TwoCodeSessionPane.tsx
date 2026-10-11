@@ -18,6 +18,8 @@ import { SessionStatisticsBar } from "@/v4/composer/SessionStatisticsBar.js";
 import { projectTwoCodeUsage } from "./usageProjection.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { useTwoCodeImages } from "@/hooks/useTwoCodeImages.js";
+import { useTwoCodeComposerFeatures } from "@/hooks/useTwoCodeComposerFeatures.js";
+import { twoCodePromptHistory } from "./composerHistory.js";
 
 export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => void }) {
   const id = twoCodeTaskId(props.sessionId);
@@ -52,6 +54,24 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
     DEFAULT_CODE_PREVIEW_SETTINGS,
   );
   const rows = useMemo(() => projectTwoCodeRows(task), [task]);
+  const promptHistory = useMemo(() => twoCodePromptHistory(state.tasks), [state.tasks]);
+  const updateText = useCallback(
+    (value: string) => {
+      setText(value);
+      localStorage.setItem(draftKey, value);
+    },
+    [draftKey],
+  );
+  useTwoCodeComposerFeatures({
+    enabled: props.focused !== false && !props.readOnly && !state.loading && !state.configuring,
+    busy: !!busy,
+    workspacePath: props.workspacePath,
+    workspaceIdentity: props.workspaceIdentity,
+    inputApiRef: input,
+    text,
+    onChange: updateText,
+    cancel: state.cancel,
+  });
   const { settings } = useSettings();
   const showReasoning = settings?.messageStreamShowReasoning ?? true;
   const readAttachment = useCallback(
@@ -200,6 +220,8 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           }}
           onPaste={images.paste}
           enableExternalFileDrop
+          enableWorkspaceFileDrop
+          promptHistory={promptHistory}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes("Files")) e.preventDefault();
           }}
@@ -214,10 +236,8 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
             (!text.trim() && !images.items.length)
           }
           enableMentionPanel={false}
-          onChange={(value) => {
-            setText(value);
-            localStorage.setItem(draftKey, value);
-          }}
+          enableSlashCommandPanel={false}
+          onChange={updateText}
           onSubmit={send}
           leadingActions={
             <TwoCodeModelControls

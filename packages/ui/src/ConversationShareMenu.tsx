@@ -6,6 +6,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { useConversationShareSelectionStore } from "@/store/conversationShareSelectionStore.js";
 import { WINDOWS_CAPTION_CONTROL_CLASS } from "@/windowCaptionControls.js";
+import { twoCodeTaskId } from "@zcode/services";
 
 export function ConversationShareMenu({
   taskId,
@@ -15,6 +16,8 @@ export function ConversationShareMenu({
   useWindowsCaptionSpacing?: boolean;
 }) {
   const { intl } = useZCodeIntl();
+  // 双模型不使用原生分享协议；按用户要求隐藏不能接通的入口。
+  const unsupported = !!twoCodeTaskId(taskId);
   const setScope = useConversationShareSelectionStore((state) => state.setScope);
   const finishSelection = useConversationShareSelectionStore((state) => state.finishSelection);
   const publishing = useConversationShareSelectionStore(
@@ -28,7 +31,7 @@ export function ConversationShareMenu({
   const handleClick = () => {
     const currentState = useConversationShareSelectionStore.getState();
     const currentlyActive = currentState.drafts[taskId]?.scope === "partial";
-    if (currentState.dockStates[taskId]?.publishing) return;
+    if (unsupported || currentState.dockStates[taskId]?.publishing) return;
     logger.debug("[conversation-share] 顶栏入口切换分享", {
       taskId,
       alreadyActive: currentlyActive,
@@ -42,6 +45,8 @@ export function ConversationShareMenu({
       showTimeline(taskId);
     }
   };
+
+  if (unsupported) return null;
 
   const trigger = (
     <Button
