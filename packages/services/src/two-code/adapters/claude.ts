@@ -114,6 +114,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       }
     >();
     let resultSeen = false;
+    let responseId: string = randomUUID();
     try {
       this.active = query({
         prompt: this.inbox,
@@ -227,10 +228,19 @@ export class ClaudeAdapter implements HarnessAdapter {
         input.signal.throwIfAborted();
         if (message.type === "stream_event") {
           const event = message.event;
+          if (event.type === "message_start") responseId = event.message.id;
           if (event.type === "content_block_delta" && event.delta.type === "text_delta")
-            await input.emit({ kind: "message", text: event.delta.text });
+            await input.emit({
+              kind: "message",
+              text: event.delta.text,
+              blockId: `${responseId}:${event.index}`,
+            });
           if (event.type === "content_block_delta" && event.delta.type === "thinking_delta")
-            await input.emit({ kind: "reasoning", text: event.delta.thinking });
+            await input.emit({
+              kind: "reasoning",
+              text: event.delta.thinking,
+              blockId: `${responseId}:${event.index}`,
+            });
           if (event.type === "content_block_stop")
             await input.emit({ kind: "reasoning", text: "" });
         } else if (message.type === "assistant") {

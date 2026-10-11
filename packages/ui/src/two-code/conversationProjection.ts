@@ -7,12 +7,16 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
   if (!task) return [];
   const rows: ConversationRow[] = [];
   const toolActivities = new Map<string, Extract<ConversationRow, { kind: "timelineMarker" }>>();
+  const textBlocks = new Map<string, Extract<ConversationRow, { kind: "assistantText" }>>();
+  const thoughtBlocks = new Map<string, Extract<ConversationRow, { kind: "reasoning" }>>();
   let turnId = "",
     header: TurnHeaderRow | undefined,
     handoff: ToolCallRow | undefined;
   let message: Extract<ConversationRow, { kind: "assistantText" }> | undefined;
   let thought: Extract<ConversationRow, { kind: "reasoning" }> | undefined;
   let thoughtRole: string | undefined;
+  let thoughtBlockId: string | undefined;
+  let previousThought: typeof thought;
   let lastEventAt: number | undefined,
     interruptedTurn = false;
   for (const event of task.events) {
@@ -24,9 +28,16 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       event.role === "system" && event.kind === "status" && event.text === "正在停止主手与副手";
     if (stopping) interruptedTurn = true;
     const base = () => ({ rowId, turnId, createdAt: at, createdAtSeq: event.seq });
-    if (thought && (event.kind !== "reasoning" || event.role !== thoughtRole || !event.text)) {
+    if (
+      thought &&
+      (event.kind !== "reasoning" ||
+        event.role !== thoughtRole ||
+        !event.text ||
+        (event.blockId && event.blockId !== thoughtBlockId))
+    ) {
       thought.state = event.kind === "error" || stopping ? "interrupted" : "complete";
       thought.durationMs = Math.max(0, at - thought.createdAt);
+      previousThought = thought;
       thought = undefined;
     }
     // 历史终态属于当轮事件；后续成功的任务快照不能改写之前的停止和副手状态。
@@ -42,10 +53,23 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
     // 直接投影原生reasoning行，让原有“已工作”和思考显示设置拥有折叠交互。
     if (event.kind === "reasoning") {
       if (!event.text) continue;
+      const existing = event.blockId ? thoughtBlocks.get(event.blockId) : undefined;
+      // 同一原生思考块的尾部可能晚于首个正文token到达；不能因此把一句话拆开。
+      const legacyTail =
+        !event.blockId &&
+        message &&
+        previousThought &&
+        thoughtRole === event.role &&
+        /^[\s.,!?。！？；;：:，]+$/.test(event.text);
+      if (existing || legacyTail) {
+        (existing ?? previousThought)!.text += event.text;
+        continue;
+      }
       message = undefined;
       if (thought) thought.text += event.text;
       else {
         thoughtRole = event.role;
+        thoughtBlockId = event.blockId;
         thought = {
           ...base(),
           kind: "reasoning",
@@ -53,6 +77,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
           text: `${event.role === "sidekick" ? "**副手**" : "**主手**"}\n\n${event.text}`,
         };
         rows.push(thought);
+        if (event.blockId) thoughtBlocks.set(event.blockId, thought);
       }
       continue;
     }
@@ -69,6 +94,9 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
         continue;
       }
       toolActivities.clear();
+      textBlocks.clear();
+      thoughtBlocks.clear();
+      previousThought = undefined;
       if (header?.state === "running") {
         header.state = "completedSuccess";
         // 兼容没有结束标记的旧数据，也只能取上一条活动时间，不能计入聊天间隔。
@@ -124,6 +152,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
         handoff.endedAt = at;
       }
     } else if (event.role === "lead" && event.kind === "message") {
+      if (event.blockId) message = textBlocks.get(event.blockId);
       if (message) message.text += event.text;
       else {
         message = {
@@ -134,6 +163,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
           model: task.lead.selection.modelLabel ?? task.lead.selection.model,
         };
         rows.push(message);
+        if (event.blockId) textBlocks.set(event.blockId, message);
       }
     } else if (event.kind === "tool") {
       message = undefined;

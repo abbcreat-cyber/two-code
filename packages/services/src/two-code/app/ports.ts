@@ -9,6 +9,7 @@ import type {
   ActorRole,
 } from "../contract.js";
 export interface EngineEvent {
+  blockId?: string;
   availableTools?: string[];
   toolCallId?: string;
   notExecuted?: boolean;

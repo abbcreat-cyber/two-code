@@ -17,6 +17,41 @@ const base: TwoCodeTask = {
   events: [],
 };
 
+for (const identified of [false, true])
+  test(`迟到思考尾部不拆开一句话：${identified ? "原生块身份" : "旧记录"}`, () => {
+    const task = structuredClone(base);
+    const values = [
+      ["user", "message", "检查"],
+      ["lead", "reasoning", "Let me"],
+      ["lead", "message", "我来"],
+      ["lead", "reasoning", "."],
+      ["lead", "message", "查一下。"],
+      ["lead", "tool", "search_web"],
+      ["lead", "reasoning", "Answer"],
+      ["lead", "message", "打"],
+      ["lead", "reasoning", "."],
+      ["lead", "message", "对了。"],
+    ] as const;
+    task.events = values.map(([role, kind, text], i) => ({
+      seq: i + 1,
+      at: task.updatedAt,
+      role,
+      kind,
+      text,
+      ...(identified && (kind === "reasoning" || (role === "lead" && kind === "message"))
+        ? { blockId: `response${i < 5 ? 1 : 2}:${kind === "reasoning" ? 0 : 1}` }
+        : {}),
+    }));
+    const rows = projectTwoCodeRows(task);
+    assert.deepEqual(
+      rows.filter((r) => r.kind === "assistantText").map((r) => r.text),
+      ["我来查一下。", "打对了。"],
+    );
+    assert.equal(rows.filter((r) => r.kind === "reasoning").length, 2);
+    assert(rows.filter((r) => r.kind === "reasoning").every((r) => r.text.endsWith(".")));
+    rows.forEach((r) => conversationRowSchema.parse(r));
+  });
+
 test("开场门禁回执将原工具尝试改为未执行，重放不重复也不伪造成功", () => {
   const task = structuredClone(base);
   task.events = [

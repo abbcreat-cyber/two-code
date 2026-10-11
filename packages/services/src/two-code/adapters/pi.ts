@@ -11,6 +11,7 @@ import { piThinkingLevel } from "../domain/thinking.js";
 import { handleExtensionUi } from "./pi-extension-ui.js";
 import { writeStepOpeningExtension } from "./step-opening.js";
 import { rejectedToolEvent } from "./tool-outcome.js";
+import { nativeDeltaEvent } from "./stream-event.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -253,6 +254,7 @@ export class PiAdapter implements HarnessAdapter {
       ttftTotal = 0,
       ttftCount = 0;
     const tools = new Map<string, number>();
+    let responseId = randomUUID();
     let resolveRun!: () => void, rejectRun!: (error: Error) => void;
     const settled = new Promise<void>((resolve, reject) => {
       resolveRun = resolve;
@@ -262,6 +264,7 @@ export class PiAdapter implements HarnessAdapter {
     this.onFailure = rejectRun;
     this.onRecord = (record) => {
       if (record.type === "message_start" && object(record.message).role === "assistant") {
+        responseId = randomUUID();
         modelStart = performance.now();
         firstToken = 0;
       }
@@ -273,15 +276,8 @@ export class PiAdapter implements HarnessAdapter {
           ["text_delta", "thinking_delta", "toolcall_delta"].includes(String(delta.type))
         )
           firstToken = performance.now();
-        if (delta.type === "text_delta")
-          void input.emit({ kind: "message", text: String(delta.delta ?? "") }).catch(rejectRun);
-        if (delta.type === "thinking_delta" || delta.type === "thinking_end")
-          void input
-            .emit({
-              kind: "reasoning",
-              text: delta.type === "thinking_end" ? "" : String(delta.delta ?? ""),
-            })
-            .catch(rejectRun);
+        const event = nativeDeltaEvent(delta, responseId);
+        if (event) void input.emit(event).catch(rejectRun);
       } else if (record.type === "message_end") {
         const message = object(record.message);
         if (message.role === "assistant") {

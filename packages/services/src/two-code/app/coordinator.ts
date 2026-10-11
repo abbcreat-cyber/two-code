@@ -18,6 +18,7 @@ import { admitTask } from "./admission.js";
 import { recoverTask } from "./recovery.js";
 import { settleRun } from "./settlement.js";
 import { handoffHistory } from "../domain/handoffs.js";
+import { assertHandoffWorkspace } from "../domain/handoff-workspace.js";
 import { handoff, readSidekick, wakeChannel } from "./sidekick-handoff.js";
 import { steerRun } from "./steering.js";
 import { readDefaults, writeDefaults } from "./default-preferences.js";
@@ -28,10 +29,8 @@ import {
   reconfigureTask,
   sidekickInstruction,
 } from "../domain/task.js";
-
 const copy = (task: TwoCodeTask): TwoCodeTask => structuredClone(task);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
 export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   private readonly tasks = new Map<string, TwoCodeTask>();
   private readonly active = new Map<string, ActiveRun>();
@@ -71,7 +70,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     role: TaskEvent["role"],
     kind: TaskEvent["kind"],
     text: string,
-    details?: Pick<TaskEvent, "toolCallId" | "notExecuted" | "handoffUserSeq">,
+    details?: Pick<TaskEvent, "toolCallId" | "notExecuted" | "handoffUserSeq" | "blockId">,
   ) {
     appendEvent(task, { role, kind, text, ...details }, new Date().toISOString());
     this.changes.fire(copy(task));
@@ -292,6 +291,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
           } else
             this.emit(task, role, event.kind, event.text, {
               toolCallId: event.toolCallId,
+              blockId: event.blockId,
               notExecuted: event.notExecuted,
             });
         },
@@ -326,6 +326,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     message: string,
     block: boolean,
   ): Promise<string> {
+    assertHandoffWorkspace(task, message, join(this.deps.sessionRoot, task.id));
     return handoff(task, run, message, block, {
       current: () => this.current(task, run),
       emit: (kind, text, userSeq) =>

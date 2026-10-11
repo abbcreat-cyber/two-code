@@ -58,6 +58,7 @@ export interface HarnessInfo {
   }>;
 }
 export interface TaskEvent {
+  blockId?: string;
   requestId?: string;
   deliveryFailed?: boolean;
   handoffUserSeq?: number;

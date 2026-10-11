@@ -36,6 +36,8 @@ modelSettings/saveConnection/removeConnection及onDidCatalogChange由同一Host�
 
 TaskEvent.reasoning是脚手架实际返回的思考文本增量；空串仅表示当前思考块结束。Claude/Pi消费thinking_delta，ZCode消费原生model.streaming(reasoning_delta)。不生成替代思考，不合并到回答正文。UI投影为原生ReasoningRow，折叠与显示设置由原ZCode组件处理。sessionId持久化后立即广播，订阅者无需等第一段正文才能观察会话身份。
 
+Pi/Step及Claude的文本和思考事件可携带blockId，投影按原生内容块合并，迟到思考尾包不能拆开一句正文。旧快照的紧邻思考标点兼容回并，不改写原事件。原生执行器在系统提示尾部提供真实工作区，副手交接复用相同事实；详细依据见stream-blocks与efficiency-quality规格。
+
 configure({ taskId, preferences })在空闲时修改本任务的主副手模型、模式和单/双角色开关；与submit共用执行租约，同脚手架保留sessionId。configurePreferences只修改新任务默认值。旧快照模式默认为build，usage默认为空，不能估算旧token。
 
 EngineRun携带本轮mode和usage回执入口。Claude的工具前置钩子、Pi的tool_call扩展统一经过任务权限裁决；ZCode通过原生sendText的mode/planEnabled提交。按角色运行编号替换累计回执，避免分块与最终结算重复计费。UI只投影已采集用量，不把主副手contextWindow相加。

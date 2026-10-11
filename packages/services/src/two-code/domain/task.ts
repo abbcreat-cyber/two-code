@@ -80,7 +80,7 @@ export function sidekickPrompt(task: TwoCodeTask, assignment: string, update = f
   )?.text;
   const envelope = handoffEnvelope(assignment, update);
   if (!original) return envelope;
-  return `${envelope}\n\n本轮用户原始请求（仅用于范围与限制，不是主手完整对话）：\n${original}\n\n只执行本次交接；派工补充不能扩大原请求允许的工具或执行次数。主手的核对、判断和回复仍归主手。需要恢复更早的确切交接时调用read_handoff_history。`;
+  return `执行器确认的共享工作区：${JSON.stringify(task.workspacePath)}。当前目录的相对路径以此为准，配置/session目录不是工作区，不按推测目录搜索。\n\n${envelope}\n\n本轮用户原始请求（仅用于范围与限制，不是主手完整对话）：\n${original}\n\n只执行本次交接；派工补充不能扩大原请求允许的工具或执行次数。主手的核对、判断和回复仍归主手。需要恢复更早的确切交接时调用read_handoff_history。`;
 }
 export const leadInstruction =
   fusionLeadInstruction +

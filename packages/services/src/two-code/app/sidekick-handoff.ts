@@ -2,7 +2,7 @@ import type { TwoCodeTask, TaskEvent } from "../contract.js";
 import type { ActiveRun } from "./active-run.js";
 import type { EngineReport } from "./ports.js";
 import { sidekickPrompt } from "../domain/task.js";
-import { reviewReportNote } from "../domain/handoffs.js";
+import { reviewReportNote, interruptionEvidenceNote } from "../domain/handoffs.js";
 
 export function wakeChannel() {
   let resolve!: () => void;
@@ -35,7 +35,10 @@ export async function readSidekick(
   if (!report)
     return "用户有新的补充，尚未取得副手最终报告。先处理补充要求；需要改向时向同一sidekick提交更新，不要重复执行已有工作，之后再read_sidekick。";
   if (run.sidekick === pending) run.sidekickRead = true;
-  return `${report.text}\n\n${reviewReportNote}`;
+  const updated =
+    task.events.findLast((e) => e.kind === "handoff" || e.kind === "handoff_update")?.kind ===
+    "handoff_update";
+  return `${report.text}\n\n${reviewReportNote}${updated ? interruptionEvidenceNote : ""}`;
 }
 
 export async function handoff(

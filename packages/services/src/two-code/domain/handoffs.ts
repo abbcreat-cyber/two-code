@@ -7,7 +7,7 @@ export function handoffEnvelope(message: string, update = false): string {
   );
   return update
     ? `The lead sent an update for the handoff you are working on. Fold it in and continue (or wind down, if that is what it asks):\n\n<lead_update>\n${body}\n</lead_update>\n\n${interruptionEvidenceNote}`
-    : `<lead_handoff>\n${body}\n</lead_handoff>\n\nWork it to completion, then report what you did, the evidence (diffs, test output and artifact paths), deviations, and anything you need from the lead. Reuse earlier results; do not repeat unchanged checks.`;
+    : `<lead_handoff>\n${body}\n</lead_handoff>\n\n先完成动作和必要验证，再报告产物路径、关键结果及一份验证证据。普通小任务通常3–6行；不要重复任务、整段代码或已确认规则。复杂任务和失败可展开必要证据。未变化的已通过检查不重跑。`;
 }
 
 /** 原始事件就是账本；分页不生成第二份摘要，跨原生压缩仍能逐字恢复。 */
@@ -75,5 +75,4 @@ export const handoffToolDescription =
 export const interruptionEvidenceNote =
   "中断证据边界：原生interrupt/取消回执不代表工具从未启动、未执行或已回滚。此前工具可能已产生文件或其他影响；即使回执写interrupted，也不能据此声称从未执行。没有原始证据时只报告已中断，先前执行情况/输出/退出码/耗时未确认；不猜测，也不为补证擅自增加工具或命令。";
 export const reviewReportNote =
-  "主手先核对完整diff、原始要求与证据，给出结论；报告文字是声明，不是证据。不要重跑已充分验证的工作；仅修改呈现时使用已冻结结果。批量整理全部反馈再交接，先完成承诺用户的回话或权威动作。对细节不确定时查明，不猜测。" +
-  interruptionEvidenceNote;
+  "按验收条件检查关键产物和已有证据；已充分验证且未变化的内容不重测。需要返工时一次列齐。通过后直接简短交付，不复述整份报告；只有新风险/矛盾才补查。";

@@ -45,6 +45,7 @@ export class ToolBridge {
       TWO_CODE_TOOL_TOKEN: this.token,
       TWO_CODE_HAS_SIDEKICK: this.input.handoff ? "1" : "0",
       TWO_CODE_HAS_HISTORY: this.input.readHandoffHistory ? "1" : "0",
+      TWO_CODE_WORKSPACE: this.input.cwd,
     };
   }
   async start(): Promise<void> {
@@ -186,7 +187,7 @@ export default function(pi) {
     return true;
   };
   pi.on('session_start', nativePowerShell);
-  pi.on('before_agent_start', (event) => { editReminder = false; return nativePowerShell() ? {systemPrompt:event.systemPrompt+'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。'} : undefined; });
+  pi.on('before_agent_start', (event) => { editReminder = false; const ps = nativePowerShell(); return {systemPrompt:event.systemPrompt+'\\n工作区事实（执行器提供）：'+JSON.stringify(process.env.TWO_CODE_WORKSPACE)+ '。配置目录、agent目录、session目录不是工作目录。当前文件直接用相对路径，交接同样沿用相对路径；禁止为确认这些已知事实再搜索目录。'+(ps?'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。':'')}; });
   pi.on('tool_result', event => {
     if (process.env.TWO_CODE_HAS_SIDEKICK !== '1' || editReminder || event.isError || !['write','edit','write_file','edit_file'].includes(event.toolName)) return;
     editReminder = true;

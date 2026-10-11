@@ -68,6 +68,7 @@ const schema = z.object({
       text: z.string(),
       toolCallId: z.string().optional(),
       notExecuted: z.boolean().optional(),
+      blockId: z.string().optional(),
       continuation: z.boolean().optional(),
       handoffUserSeq: z.number().int().positive().optional(),
       requestId: z.string().optional(),
