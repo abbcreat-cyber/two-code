@@ -26,6 +26,8 @@ UI重开先读快照再消费单调序号变化。Host重启将未完成任务�
 
 运行中补充在原生更新确认排队后撤回准入前的主手待批准操作，以拒绝唤醒旧工具；不批准旧操作、不移除之后的新权限或无关副手权限，迟到旧permissionId返回失效。UI按同一任务permissions显示“待确认”与申请角色，刷新不保留已撤回的卡。工作目录按完整JSON字符串提供，空格不构成路径分隔。验收见specs/two-code/experience-refinement.md。
 
+用户补充保存失败或副手update未确认均进入任务级错误并立即abort旧计划，主手不能通过捕获工具异常后读旧报告将任务标为完成。错误保存再次失败仍停止并显式报告；重复用户requestId沿用deliveryFailed结果。详见collaboration-boundaries规格。
+
 技术端口和验收见specs/two-code/multi-harness.md。
 
 Step Code以step-code标识接入同一Coordinator，执行本机step.exe原生RPC。step-api和step-plan保留不同provider身份，显示Step-5 API与Step-5订阅，模型ID仍为step-5-preview。只读导入配置，准入冻结后写角色私有目录。执行前检查权限扩展已加载，Step/Pi的权限通道失败必须阻断工具。Windows原生powershell存在时直接启用，不能用Bash包装冒充。详见specs/two-code/step-code.md。

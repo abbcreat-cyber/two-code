@@ -38,6 +38,12 @@ for (const [title, file] of [
   ...(process.env.TWO_CODE_LEAD_DENIED_TASK
     ? [["主手拒绝", process.env.TWO_CODE_LEAD_DENIED_TASK]]
     : []),
+  ...(process.env.TWO_CODE_UPDATE_ERRORS_DIR
+    ? [
+        ["用户补充失败", `${process.env.TWO_CODE_UPDATE_ERRORS_DIR}/user-update.json`],
+        ["副手补充失败", `${process.env.TWO_CODE_UPDATE_ERRORS_DIR}/sidekick-update.json`],
+      ]
+    : []),
 ]) {
   const original = JSON.parse(await fs.readFile(file!, "utf8"));
   const created = await service.create({
@@ -96,6 +102,23 @@ try {
       .first()
       .click();
     await page.getByTestId("two-code-state").waitFor();
+    if (task.title.endsWith("补充失败")) {
+      for (const replay of [false, true]) {
+        if (replay) await page.reload();
+        await page.locator('[data-testid="two-code-state"][data-status="error"]').waitFor();
+        await page
+          .getByRole("alert")
+          .filter({ hasText: /未确认送达/ })
+          .waitFor();
+        const saved = JSON.parse(await fs.readFile(`${root}/data/tasks/${task.id}.json`, "utf8"));
+        assert.equal(saved.status, "error");
+        assert.deepEqual(saved.permissions, []);
+        assert.deepEqual(saved.events, task.events, "重开不能自动恢复失败任务或更改历史");
+      }
+      await page.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });
+      results.push({ title: task.title, passed: true });
+      continue;
+    }
     for (const b of await page
       .getByRole("button")
       .filter({ hasText: /已工作/ })

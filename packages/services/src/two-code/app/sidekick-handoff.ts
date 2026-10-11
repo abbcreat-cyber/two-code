@@ -4,6 +4,7 @@ import type { EngineReport } from "./ports.js";
 import { sidekickPrompt } from "../domain/task.js";
 import { reviewReportNote, interruptionEvidenceNote } from "../domain/handoffs.js";
 import { verificationReport } from "../domain/verification-report.js";
+import { failUpdate } from "./update-failure.js";
 
 export function wakeChannel() {
   let resolve!: () => void;
@@ -63,10 +64,18 @@ export async function handoff(
     }
     task.permissions = task.permissions.filter((p) => p.role !== "sidekick");
     run.sidekickRead = false;
-    await adapter.update(sidekickPrompt(task, message, true));
-    owner.current();
-    owner.emit("handoff_update", message, userSeq);
-    await owner.save();
+    try {
+      await adapter.update(sidekickPrompt(task, message, true));
+      owner.current();
+      owner.emit("handoff_update", message, userSeq);
+      await owner.save();
+    } catch (error) {
+      // 工具异常可能被主手捕获；任务级失败必须由协调器保留，不能读旧报告后变成功。
+      await failUpdate(run, "副手补充", error, {
+        emit: (event) => owner.emit(event.kind, event.text),
+        save: owner.save,
+      });
+    }
     return block
       ? readSidekick(task, run, owner.current)
       : "更新已提交给原副手，尚未取得完成报告；请read_sidekick等待。";
