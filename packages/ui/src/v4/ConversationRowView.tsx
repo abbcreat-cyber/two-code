@@ -15,6 +15,7 @@ import {
   ThumbsUpIcon,
   TrendingUpDownIcon,
   XIcon,
+  WrenchIcon,
 } from "lucide-react";
 import {
   TID_V4_EDIT,
@@ -47,6 +48,7 @@ import type {
   V4ConversationFileRewindPreviewResult,
 } from "@zcode/shared/zcode-protocol-v4";
 import { AssistantPreviewCards } from "@/AssistantPreviewCards.js";
+import { ToolLayout } from "@/ToolCallBlocks/ToolLayout.js";
 import { AssistantCodeCommentCards } from "@/AssistantCodeCommentCards.js";
 import { useAssistantCodeCommentFeatureEnabled } from "@/AssistantCodeCommentFeatureProvider.js";
 import {
@@ -1869,6 +1871,28 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
 
   if (!view) {
     return null;
+  }
+  // Two Code旧事件只有工具名；沿用原生工具位置，不把活动记录画成居中分隔线或伪造成功回执。
+  if (marker.type === "harnessActivity") {
+    return (
+      <div
+        data-harness-tool-activity="true"
+        data-row-id={row.rowId}
+        data-row-kind="timelineMarker"
+        data-marker-type={marker.type}
+        data-testid={testId(TID_V4_ROW, String(row.rowId))}
+      >
+        <ToolLayout
+          toolId={`${row.turnId}:activity:${row.rowId}`}
+          icon={<WrenchIcon className="size-4 shrink-0" />}
+          kindLabel={null}
+          primaryText={<span className="break-all">{marker.label}</span>}
+          prioritizePrimaryText
+          title={marker.label}
+          canToggle={false}
+        />
+      </div>
+    );
   }
   return (
     <MarkerDividerRow

@@ -99,3 +99,21 @@ Coordinator 将真实共享工作目录注入两角色指令，避免主手因�
 58项针对性测试、typecheck和架构检查通过；lint为71项既有warning、0 error。最终构建/打包通过。前一候选包出现一次Windows临时文件占用EPERM，重试成功，失败候选未切换快捷方式。最终安装目录为 `D:/Apps/TwoCode/releases/0.8.1/win-unpacked`，快捷方式备份至 `D:/Apps/TwoCode/backups/before-0.8.1`。保留用户原有运行窗口，新版本重开后生效。
 
 未覆盖/未实现：原生select/input/editor交互尚未映射到Two Code问答UI，目前取消并明确报告不支持；自然语言工具限制仍依赖模型理解，本轮不宣称所有任务都不会追加验证。测试脚本只操作隔离的不可聚焦后台窗口，不使用物理鼠标。
+
+## 后续真实验收与工具布局
+
+固定同一组合，并行测拒绝写入后重新授权、同目录不同文件的两轮修改；中间销毁并重建测试服务，验证原生会话恢复、主副手session互不串用、保护字段不变。测试只在独立QA目录操作，单轮180秒上限。
+
+用户要求工具调用恢复原版前端位置：harnessActivity保留历史事件兼容，但不再用居中MarkerDividerRow渲染；改用原版ToolLayout/ToolSummaryRow，在正文左侧随工具发生顺序显示，不新增展示组件。仅有工具名的历史记录不虚构输入、输出或成功状态，也不提供无内容的展开按钮。任务状态和权限仍由Coordinator持有，展示层只投影事实。以真实任务和历史回放截图验收。
+
+### 0.8.2 验收记录（2026-10-11）
+
+- `D:/Apps/TwoCode/qa/step-claude-roundtrip-1791686478207`：固定Step Plan主手、Claude DeepSeek high副手，三项任务并行，两轮共6项检查通过。拒绝Write后未落文件且未重复申请；新一轮明确批准后写入成功；同目录alpha/beta JSON分别修改、恢复，保护字段不变；重建服务后两角色session保持，暗号青竹/红梅没有混用。
+- `D:/Apps/TwoCode/qa/tool-layout-1791686951191`：首次布局检查通过真实read_file左对齐，但窄窗口下超长工具名越界。使用原版布局的主文本约束并补充断行后修复。
+- `D:/Apps/TwoCode/qa/tool-layout-1791687051813`：源码构建回放通过。真实任务与明确标注的旧工具记录夹具分开验收，覆盖write_file/edit_file/read_file/run_command与长名称；不生成或冒充历史工具结果。
+- `D:/Apps/TwoCode/qa/tool-layout-1791687160513`：0.8.2安装包通过同样的回放、1280及780宽窗口布局、刷新恢复，无renderer错误。
+- `D:/Apps/TwoCode/qa/tool-layout-1791687320906`：最终安装包新增真实小任务通过。副手仅心算13+4，主手实际调用write_file、edit_file、read_file，文件由17改为18；新工具调用同样走原版左侧摘要。`live.png`已目视确认，副手没有额外工具调用，renderer errors为空。
+
+布局验证脚本先经公开服务建立任务索引，再装载只读快照，保持服务返回的规范化workspacePath；早期直接注入快照/使用非规范化路径导致的脚本装载失败不计为产品故障。工具行保留rowId等历史定位属性；仅改变harnessActivity的渲染位置，压缩、模型切换等其他原生分隔线不变。
+
+58项既有针对性回归通过，typecheck和架构检查通过，lint为71项既有warning、0 error。构建和0.8.2打包成功。本地快捷方式已指向 `D:/Apps/TwoCode/releases/0.8.2/win-unpacked/Two Code.exe`。更新前确认无运行中的双角色任务，备份快捷方式与任务快照至 `D:/Apps/TwoCode/backups/before-0.8.2`；关闭旧窗口后因仍驻留托盘，结束已核实的旧进程树，再启动新版。Win32验证进程41724版本0.8.2、窗口可见且位于桌面内，证据 `D:/Apps/TwoCode/releases/0.8.2/visible-window.json`。全程没有使用物理鼠标。
