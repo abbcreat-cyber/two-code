@@ -71,6 +71,11 @@ export class ClaudeReceiptTracker {
       for (const b of message.message.content)
         if (b.type === "tool_result" && !this.done.has(b.tool_use_id)) {
           this.done.add(b.tool_use_id);
+          await this.emit({
+            kind: "tool_end",
+            toolCallId: b.tool_use_id,
+            text: b.is_error ? "error" : "success",
+          });
           const event = verificationEvent(
             this.names.get(b.tool_use_id) ?? "",
             b.tool_use_id,

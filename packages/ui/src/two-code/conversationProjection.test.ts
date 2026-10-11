@@ -17,6 +17,108 @@ const base: TwoCodeTask = {
   events: [],
 };
 
+test("工具参数生成显示原工具行，执行前不标成功，中断和刷新可恢复", () => {
+  const task = structuredClone(base);
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "画SVG" },
+    { seq: 2, at: task.updatedAt, role: "lead", kind: "message", text: "我来画。" },
+    {
+      seq: 3,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_input",
+      toolCallId: "a",
+      text: JSON.stringify({
+        tool: "write_file",
+        characters: 10,
+        bytes: 10,
+        preview: '{"content"',
+      }),
+    },
+    {
+      seq: 4,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_input",
+      toolCallId: "a",
+      text: JSON.stringify({
+        tool: "write_file",
+        characters: 30,
+        bytes: 30,
+        preview: '{"content":"<svg/>',
+      }),
+    },
+  ];
+  let rows = projectTwoCodeRows(task);
+  const tools = rows.filter((r) => r.kind === "toolCall");
+  assert.equal(tools.length, 1);
+  assert.equal(tools[0]!.status, "inputStreaming");
+  assert.match(tools[0]!.progress!.previewLine!, /30 字符/);
+  assert(rows.filter((r) => r.kind === "assistantText").every((r) => r.state === "complete"));
+  assert.deepEqual(rows, projectTwoCodeRows(JSON.parse(JSON.stringify(task))));
+  task.events.push({
+    seq: 5,
+    at: task.updatedAt,
+    role: "lead",
+    kind: "tool",
+    toolCallId: "a",
+    text: "write_file",
+  });
+  assert.equal(projectTwoCodeRows(task).filter((r) => r.kind === "toolCall")[0]!.status, "running");
+  task.events.push({
+    seq: 6,
+    at: task.updatedAt,
+    role: "lead",
+    kind: "tool_end",
+    toolCallId: "a",
+    text: "error",
+  });
+  rows = projectTwoCodeRows(task);
+  assert.equal(rows.filter((r) => r.kind === "toolCall")[0]!.status, "error");
+  rows.forEach((r) => conversationRowSchema.parse(r));
+  task.events = task.events.slice(0, 4);
+  task.status = "cancelled";
+  assert.equal(
+    projectTwoCodeRows(task).filter((r) => r.kind === "toolCall")[0]!.status,
+    "cancelled",
+  );
+});
+test("派工生成行合并到原副手工具，副手草稿不在中间新增面板", () => {
+  const task = structuredClone(base);
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "画SVG" },
+    {
+      seq: 2,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool_input",
+      toolCallId: "dispatch",
+      text: JSON.stringify({ tool: "sidekick", characters: 10, bytes: 10 }),
+    },
+    { seq: 3, at: task.updatedAt, role: "lead", kind: "handoff", text: "绘制" },
+    {
+      seq: 4,
+      at: task.updatedAt,
+      role: "sidekick",
+      kind: "tool_input",
+      toolCallId: "w",
+      text: JSON.stringify({
+        tool: "Write",
+        characters: 50,
+        bytes: 50,
+        preview: '{"content":"<svg/>',
+      }),
+    },
+  ];
+  const rows = projectTwoCodeRows(task),
+    tools = rows.filter((r) => r.kind === "toolCall");
+  assert.equal(tools.length, 1);
+  assert.equal(tools[0]!.toolName, "sidekick");
+  assert.match(tools[0]!.output!.text, /<svg/);
+  assert.match(tools[0]!.progress!.previewLine!, /50 字符/);
+  rows.forEach((r) => conversationRowSchema.parse(r));
+});
+
 for (const identified of [false, true])
   test(`迟到思考尾部不拆开一句话：${identified ? "原生块身份" : "旧记录"}`, () => {
     const task = structuredClone(base);

@@ -35,6 +35,19 @@ function isEmptyPlainRecord(value: unknown): boolean {
 
 /** input 缺席时，用 v4 inputText 还原完整或流式半截工具参数预览。 */
 function resolveToolInputPreview(row: ToolCallRow): ResolvedToolInputPreview {
+  // 跨底座的半截参数不符合本前端原生Edit schema，保留可读预览，不能丢成空白“正在编辑”。
+  if (row.toolCallId.startsWith("two-code:native:") && row.inputText) {
+    const parsed = buildZCodeStreamingToolInputPreview(row.inputText).input;
+    const draft = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    const content = draft.content ?? draft.new_string ?? draft.replace;
+    return {
+      input: {
+        "参数预览（草稿，最多20000字符）": typeof content === "string" ? content : row.inputText,
+      },
+      inputPreviewComplete: false,
+      streamingRawInputLength: row.inputText.length,
+    };
+  }
   if (row.input !== undefined) {
     return {
       input: row.input,
@@ -93,6 +106,9 @@ export function toolCallRowToLegacyNode(row: ToolCallRow): TaskChatToolCallTreeN
     toolCall: {
       toolId: row.toolCallId,
       toolName: row.toolName,
+      ...(row.toolCallId.startsWith("two-code:") && row.progress?.previewLine
+        ? { title: row.progress.previewLine }
+        : {}),
       // kind 兼容旧聚合分类：v4 下没有旧 ZCode Agent 快照形态，直接用固定工具名。
       kind: row.toolName,
       input: inputPreview.input,
@@ -116,6 +132,7 @@ export function toolCallRowToLegacyNode(row: ToolCallRow): TaskChatToolCallTreeN
         toolCallId: row.toolCallId,
         toolName: row.toolName,
         v4Status: row.status,
+        ...(row.toolCallId.startsWith("two-code:native:") ? { twoCodeNative: true } : {}),
         ...(row.cuaApp ? { cuaApp: row.cuaApp } : {}),
         ...(legacyDisplay ? { display: legacyDisplay } : {}),
         inputPreviewComplete: inputPreview.inputPreviewComplete,

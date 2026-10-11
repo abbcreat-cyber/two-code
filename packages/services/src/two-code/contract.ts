@@ -72,6 +72,8 @@ export interface TaskEvent {
     | "message"
     | "reasoning"
     | "tool"
+    | "tool_input"
+    | "tool_end"
     | "verification"
     | "status"
     | "error"

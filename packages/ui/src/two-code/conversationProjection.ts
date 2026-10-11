@@ -1,11 +1,13 @@
 import type { TwoCodeTask } from "@zcode/services";
 import type { ConversationRow, ToolCallRow, TurnHeaderRow } from "@zcode/shared/zcode-protocol-v4";
 import { projectImageMessage } from "./imageMessage.js";
+import { NativeToolRows } from "./nativeToolProjection.js";
 
 /** 仅作展示投影：复用原生行和滚动/Markdown渲染，不复制执行状态。 */
 export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
   if (!task) return [];
   const rows: ConversationRow[] = [];
+  const nativeTools = new NativeToolRows();
   const toolActivities = new Map<string, Extract<ConversationRow, { kind: "timelineMarker" }>>();
   const textBlocks = new Map<string, Extract<ConversationRow, { kind: "assistantText" }>>();
   const thoughtBlocks = new Map<string, Extract<ConversationRow, { kind: "reasoning" }>>();
@@ -51,6 +53,10 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       }
     }
     // 直接投影原生reasoning行，让原有“已工作”和思考显示设置拥有折叠交互。
+    if (nativeTools.apply(event, turnId, rows, handoff)) {
+      message = undefined;
+      continue;
+    }
     if (event.kind === "reasoning") {
       if (!event.text) continue;
       const existing = event.blockId ? thoughtBlocks.get(event.blockId) : undefined;
@@ -126,6 +132,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       handoff = undefined;
     } else if (event.kind === "handoff") {
       message = undefined;
+      nativeTools.handoff(turnId, rows);
       handoff = {
         ...base(),
         kind: "toolCall",
@@ -138,6 +145,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       };
       rows.push(handoff);
     } else if (event.kind === "handoff_update" && handoff) {
+      nativeTools.handoff(turnId, rows);
       handoff.inputText += `\n\n<lead_update>\n${event.text}\n</lead_update>`;
       handoff.input = {
         description: `副手 · ${task.sidekick.selection.harness}`,
@@ -216,5 +224,6 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       task.status === "cancelled" || task.status === "error" ? "interrupted" : "complete";
   if (handoff?.status === "running" && task.status !== "running")
     handoff.status = task.sidekick.status === "completed" ? "success" : "cancelled";
+  nativeTools.finish(task, turnId);
   return rows;
 }

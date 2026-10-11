@@ -1,5 +1,13 @@
 import type { EngineEvent } from "../app/ports.js";
 
+export function nativeToolStart(record: Record<string, unknown>): EngineEvent {
+  return {
+    kind: "tool",
+    text: String(record.toolName ?? "工具执行"),
+    toolCallId: String(record.toolCallId),
+  };
+}
+
 /** 传递原生块身份；thinking尾包和text首包可交错到达，不能按到达顺序猜分段。 */
 export function nativeDeltaEvent(
   delta: Record<string, unknown>,

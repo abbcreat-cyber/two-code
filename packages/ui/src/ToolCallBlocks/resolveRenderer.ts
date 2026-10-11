@@ -55,6 +55,10 @@ import { resolveToolCallIdentity } from "@/lib/toolIdentity.js";
 import type { ToolCallBlockRenderContext } from "@/ToolCallBlocks/shared.js";
 
 export function resolveToolCallRenderer(context: ToolCallBlockRenderContext) {
+  const raw = context.toolCallNode.toolCall.raw;
+  // 外部底座工具沿用原版通用详情；本地Edit专用schema会吃掉其流式草稿和进度标题。
+  if (raw && typeof raw === "object" && "twoCodeNative" in raw && raw.twoCodeNative === true)
+    return FallbackToolCallBlock;
   if (context.toolCallNode.toolCall.kind === "changesGroup") {
     return ChangesGroupToolCallBlock;
   }

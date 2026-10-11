@@ -15,6 +15,7 @@ import { permissionDenied } from "./permission-feedback.js";
 import { claudeTools } from "./claude-tools.js";
 import { ClaudeReceiptTracker } from "./verification-receipts.js";
 import { claudeConnection } from "./claude-connection.js";
+import { NativeToolProgress } from "./tool-input-progress.js";
 
 export class ClaudeAdapter implements HarnessAdapter {
   private active?: Query;
@@ -192,11 +193,14 @@ export class ClaudeAdapter implements HarnessAdapter {
         },
       });
       this.updateReady.resolve();
+      const toolProgress = new NativeToolProgress();
       for await (const message of this.active) {
         input.signal.throwIfAborted();
         await receipts.observe(message);
         if (message.type === "stream_event") {
           const event = message.event;
+          const progress = toolProgress.claude(event);
+          if (progress) await input.emit(progress);
           if (event.type === "message_start") responseId = event.message.id;
           if (event.type === "content_block_delta" && event.delta.type === "text_delta")
             await input.emit({

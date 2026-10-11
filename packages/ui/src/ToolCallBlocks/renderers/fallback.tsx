@@ -32,6 +32,13 @@ export function FallbackToolCallBlock(context: FallbackToolCallBlockProps) {
     onOpenBrowserUrl,
   } = context;
   const { toolCall } = toolCallNode;
+  const nativeInput =
+    toolCall.toolId.startsWith("two-code:native:") &&
+    toolCall.input &&
+    typeof toolCall.input === "object"
+      ? (toolCall.input as Record<string, unknown>)["参数预览（草稿，最多20000字符）"]
+      : undefined;
+  const draft = typeof nativeInput === "string" ? nativeInput : undefined;
   const kindLabel =
     toolCall.kind.length > 0
       ? toolCall.kind[0]!.toUpperCase() + toolCall.kind.slice(1)
@@ -41,6 +48,14 @@ export function FallbackToolCallBlock(context: FallbackToolCallBlockProps) {
   const renderContent = useCallback(
     () => (
       <>
+        {draft !== undefined ? (
+          <pre
+            data-testid="two-code-tool-draft"
+            className="rounded-xl bg-surface px-4 py-3 text-ui-xs text-foreground-subtle max-h-60 overflow-auto whitespace-pre-wrap break-words"
+          >
+            {draft}
+          </pre>
+        ) : null}
         <ToolCallBody
           childToolList={childToolList}
           displayModel={displayModel}
@@ -69,6 +84,7 @@ export function FallbackToolCallBlock(context: FallbackToolCallBlockProps) {
     ),
     [
       childToolList,
+      draft,
       codePreviewSettings,
       displayModel,
       handleLoadFullToolCallFields,

@@ -59,6 +59,8 @@ const schema = z.object({
         "message",
         "reasoning",
         "tool",
+        "tool_input",
+        "tool_end",
         "verification",
         "status",
         "error",

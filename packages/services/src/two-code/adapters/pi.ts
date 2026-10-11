@@ -11,8 +11,9 @@ import { piThinkingLevel } from "../domain/thinking.js";
 import { handleExtensionUi } from "./pi-extension-ui.js";
 import { writeStepOpeningExtension } from "./step-opening.js";
 import { rejectedToolEvent } from "./tool-outcome.js";
-import { nativeDeltaEvent } from "./stream-event.js";
+import { nativeDeltaEvent, nativeToolStart } from "./stream-event.js";
 import { nativeVerificationEvent } from "./verification-receipts.js";
+import { NativeToolProgress } from "./tool-input-progress.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -263,7 +264,10 @@ export class PiAdapter implements HarnessAdapter {
     });
     void settled.catch(() => undefined);
     this.onFailure = rejectRun;
+    const toolProgress = new NativeToolProgress();
     this.onRecord = (record) => {
+      const progress = toolProgress.pi(record);
+      if (progress) void input.emit(progress).catch(rejectRun);
       if (record.type === "message_start" && object(record.message).role === "assistant") {
         responseId = randomUUID();
         modelStart = performance.now();
@@ -305,13 +309,7 @@ export class PiAdapter implements HarnessAdapter {
         }
       } else if (record.type === "tool_execution_start") {
         tools.set(String(record.toolCallId), performance.now());
-        void input
-          .emit({
-            kind: "tool",
-            text: String(record.toolName ?? "工具执行"),
-            toolCallId: String(record.toolCallId),
-          })
-          .catch(rejectRun);
+        void input.emit(nativeToolStart(record)).catch(rejectRun);
       } else if (record.type === "tool_execution_end") {
         const receipt = nativeVerificationEvent(record);
         if (receipt) void input.emit(receipt).catch(rejectRun);

@@ -2,6 +2,8 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
+tool_input记录原生参数生成进度，与tool（开始调用）、tool_end（原生完成）共享toolCallId。文件草稿预览最多20000字符，参数未完成不能视为执行成功。UI沿用原工具行，副手草稿保留在交接详情；开始派工时合并参数生成行，防止重复卡。流式过程及恢复均由同一事件日志投影，不把未知或中断标为成功。详见tool-input-progress规格。
+
 verification事件保存原生命令工具的有界测试摘要和实际工具返回状态；不解析副手自述当作证据，不保留完整stdout或命令。read_sidekick将本次交接的回执和副手报告分开提供，不能用上一交接成功覆盖当前失败。工具completed不等于需求全部通过，reportedExitCode仅为输出中明确报告的值。见native-verification-receipts规格。
 
 importImage将有界图片保存为Host持久附件，UI草稿仅保存引用及缩略图，发送复用原submit。两角色的view_image返回原生图像内容块；SVG由Host内置渲染，不依赖外部命令。模型image能力沿用原配置。Claude本机Messages网关的工具图片在本轮私有转发器中提升到同消息顶层image，保持工具配对，不改共享网关。详见specs/two-code/vision.md。
