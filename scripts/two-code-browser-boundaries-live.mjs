@@ -5,12 +5,17 @@ import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { _electron as electron } from "playwright-core";
 
-const forms = process.argv.includes("--forms")
-  ? await import("./two-code-browser-forms-fixture.mjs")
+const glm = process.argv.includes("--glm")
+  ? await import("./two-code-glm-code-fixture.mjs")
   : undefined;
+const forms =
+  process.argv.includes("--forms") || glm
+    ? await import("./two-code-browser-forms-fixture.mjs")
+    : undefined;
 
 const root = `D:/Apps/TwoCode/qa/embedded-browser-${Date.now()}`;
 await fs.mkdir(`${root}/data`, { recursive: true });
+if (glm) await glm.configure(root);
 await fs.writeFile(
   `${root}/owner.json`,
   JSON.stringify({ kind: "two-code-embedded-browser-qa", root }),
@@ -67,7 +72,9 @@ await fs.writeFile(
       model: "step-5-preview",
       thinking: "medium",
     },
-    sidekick: { harness: "claude-code", model: "claude-sonnet-4-8", thinking: "high" },
+    sidekick: glm
+      ? glm.sidekick
+      : { harness: "claude-code", model: "claude-sonnet-4-8", thinking: "high" },
   }),
 );
 const env = {
@@ -81,7 +88,7 @@ const env = {
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({
-  executablePath: `${process.env.TWO_CODE_RELEASE_DIR || "D:/Apps/TwoCode/releases/0.8.23"}/win-unpacked/Two Code.exe`,
+  executablePath: `${process.env.TWO_CODE_RELEASE_DIR || "D:/Apps/TwoCode/releases/0.8.24"}/win-unpacked/Two Code.exe`,
   args: ["--disable-gpu"],
   env,
   timeout: 60000,
@@ -190,12 +197,13 @@ async function settle(text, prior, id) {
   }
   throw Error("本轮300秒截止");
 }
-async function run(name, text, id) {
+async function run(name, text, id, policy) {
   const prior = new Set((await tasks()).map((t) => t.id)),
     started = Date.now();
   const prompt =
     text +
-    " 全程只用内置browser与sidekick/read_sidekick，禁止shell、外部浏览器、源码读写和evaluate；实际结果与预期不同须如实报告。主手判断和复核，动作由指定角色执行，别重复保存。";
+    (policy ??
+      " 全程只用内置browser与sidekick/read_sidekick，禁止shell、外部浏览器、源码读写和evaluate；实际结果与预期不同须如实报告。主手判断和复核，动作由指定角色执行，别重复保存。");
   await page.getByTestId("two-code-composer").fill(prompt);
   await page.getByTestId("two-code-send").click();
   const task = await settle(prompt, prior, id);
@@ -228,8 +236,15 @@ try {
     w.showInactive();
   });
   console.log(JSON.stringify({ root, origin }));
+  if (glm) {
+    await glm.verifyMenu(page);
+    results.push({ name: "glm-menu", passed: true });
+  }
   if (forms) {
     await forms.runScenarios({ run, origin, writes, inputs, results, app });
+    if (glm) {
+      await glm.runScenarios({ run, page, results });
+    }
   } else {
     const first = await run(
       "tabs",
