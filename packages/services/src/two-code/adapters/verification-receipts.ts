@@ -24,7 +24,11 @@ export function verificationEvent(
   if (!["powershell", "bash", "run_command", "execute_command"].includes(tool.toLowerCase()))
     return;
   const text = notExecuted ? "" : textOf(result),
-    match = /(?:^|\n)\s*(?:EXIT(?:CODE)?|Exit code)\s*[:=]\s*(-?\d+)\s*(?:$|\n)/i.exec(text);
+    // Claude原生失败头是“Exit code 7”（无冒号），不能依赖模型补打印EXITCODE才保留退出码。
+    match =
+      /(?:^|\n)[ \t]*(?:EXIT(?:CODE)?[ \t]*[:=][ \t]*|Exit code(?:[ \t]*[:=][ \t]*|[ \t]+))(-?\d+)[ \t]*(?:\r?$|\r?\n)/i.exec(
+        text,
+      );
   const exitCode = match ? Number(match[1]) : undefined;
   const summaries = text
     .split(/\r?\n/)
@@ -50,7 +54,7 @@ export function verificationEvent(
           : isError
             ? "failed"
             : "completed",
-      ...(exitCode !== undefined ? { reportedExitCode: exitCode } : {}),
+      ...(Number.isSafeInteger(exitCode) ? { reportedExitCode: exitCode } : {}),
       summaries,
       outputCoverage: "selected-lines",
       streamSeparation: "unavailable",

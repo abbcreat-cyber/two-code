@@ -8,6 +8,47 @@ import {
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { EngineEvent } from "../app/ports.js";
 
+test("原生无冒号Exit code回执保留退出码，不靠模型额外打印EXITCODE", () => {
+  for (const text of [
+    "Exit code 7\nFAIL: fixture",
+    "Exit code: 7\r\nFAIL: fixture",
+    "EXITCODE=7",
+    "EXIT: 7",
+  ]) {
+    assert.equal(
+      JSON.parse(verificationEvent("PowerShell", "native", text, true)!.text).reportedExitCode,
+      7,
+    );
+  }
+  assert.equal(
+    JSON.parse(verificationEvent("PowerShell", "native", "Exit code 7\nEXITCODE=0", true)!.text)
+      .reportedExitCode,
+    7,
+  );
+  for (const text of [
+    "模型认为Exit code 7",
+    "echo Exit code 7",
+    "Exit code 7 trailing",
+    "Exit code\n7",
+    "Exit code 999999999999999999999",
+  ]) {
+    assert.equal(
+      JSON.parse(verificationEvent("PowerShell", "native", text, true)!.text).reportedExitCode,
+      undefined,
+    );
+  }
+  assert.equal(
+    JSON.parse(verificationEvent("PowerShell", "zero", "Exit code 0", false)!.text)
+      .reportedExitCode,
+    0,
+  );
+  const denied = JSON.parse(
+    verificationEvent("PowerShell", "deny", "Exit code 7", true, false, true)!.text,
+  );
+  assert.equal(denied.reportedExitCode, undefined);
+  assert.equal(denied.status, "not-executed");
+});
+
 test("SDK拒绝先于assistant到达时仍只产生未执行回执，普通错误不能伪装拒绝", async () => {
   const events: EngineEvent[] = [];
   const tracker = new ClaudeReceiptTracker(async (e) => {

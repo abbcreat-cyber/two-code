@@ -17,34 +17,43 @@ const services = createLocalServices({
   service = services.get(ITwoCodeService);
 const prepared = [];
 const historyRoot = process.env.TWO_CODE_RECEIPTS_HISTORY_ROOT;
-for (const [title, file] of [
-  [
-    "成功回执",
-    historyRoot
-      ? `${historyRoot}/success-final.json`
-      : "D:/Apps/TwoCode/qa/efficiency-receipts-candidate-1791699649372/repair-1.json",
-  ],
-  [
-    "失败回执",
-    historyRoot
-      ? `${historyRoot}/failure-final.json`
-      : "D:/Apps/TwoCode/qa/efficiency-receipts-final-1791699869596/failure-2.json",
-  ],
-  ...(process.env.TWO_CODE_WARNING_TASK ? [["警告回执", process.env.TWO_CODE_WARNING_TASK]] : []),
-  ...(process.env.TWO_CODE_DENIED_TASK ? [["副手拒绝", process.env.TWO_CODE_DENIED_TASK]] : []),
-  ...(process.env.TWO_CODE_INTERRUPTED_TASK
-    ? [["执行中断", process.env.TWO_CODE_INTERRUPTED_TASK]]
-    : []),
-  ...(process.env.TWO_CODE_LEAD_DENIED_TASK
-    ? [["主手拒绝", process.env.TWO_CODE_LEAD_DENIED_TASK]]
-    : []),
-  ...(process.env.TWO_CODE_UPDATE_ERRORS_DIR
-    ? [
-        ["用户补充失败", `${process.env.TWO_CODE_UPDATE_ERRORS_DIR}/user-update.json`],
-        ["副手补充失败", `${process.env.TWO_CODE_UPDATE_ERRORS_DIR}/sidekick-update.json`],
-      ]
-    : []),
-]) {
+const repairRoot = process.env.TWO_CODE_REPAIR_CYCLE_ROOT;
+const cases = repairRoot
+  ? [
+      ["原生退出码", `${repairRoot}/first-failed.json`],
+      ["修复回执", `${repairRoot}/second-repaired.json`],
+    ]
+  : [
+      [
+        "成功回执",
+        historyRoot
+          ? `${historyRoot}/success-final.json`
+          : "D:/Apps/TwoCode/qa/efficiency-receipts-candidate-1791699649372/repair-1.json",
+      ],
+      [
+        "失败回执",
+        historyRoot
+          ? `${historyRoot}/failure-final.json`
+          : "D:/Apps/TwoCode/qa/efficiency-receipts-final-1791699869596/failure-2.json",
+      ],
+      ...(process.env.TWO_CODE_WARNING_TASK
+        ? [["警告回执", process.env.TWO_CODE_WARNING_TASK]]
+        : []),
+      ...(process.env.TWO_CODE_DENIED_TASK ? [["副手拒绝", process.env.TWO_CODE_DENIED_TASK]] : []),
+      ...(process.env.TWO_CODE_INTERRUPTED_TASK
+        ? [["执行中断", process.env.TWO_CODE_INTERRUPTED_TASK]]
+        : []),
+      ...(process.env.TWO_CODE_LEAD_DENIED_TASK
+        ? [["主手拒绝", process.env.TWO_CODE_LEAD_DENIED_TASK]]
+        : []),
+      ...(process.env.TWO_CODE_UPDATE_ERRORS_DIR
+        ? [
+            ["用户补充失败", `${process.env.TWO_CODE_UPDATE_ERRORS_DIR}/user-update.json`],
+            ["副手补充失败", `${process.env.TWO_CODE_UPDATE_ERRORS_DIR}/sidekick-update.json`],
+          ]
+        : []),
+    ];
+for (const [title, file] of cases) {
   const original = JSON.parse(await fs.readFile(file!, "utf8"));
   const created = await service.create({
     workspacePath: cwd,
@@ -129,33 +138,59 @@ try {
       leadDenied ? '[data-tool-name="powershell"]' : '[data-tool-name="sidekick"]',
     );
     if (leadDenied) assert.equal(await target.count(), 1, "拒绝消息不应产生重复工具行");
-    const row = target.first();
+    const row = task.title === "修复回执" ? target.last() : target.first();
     await row.waitFor();
     const trigger = row.locator('[data-testid^="tool-summary-trigger"]').first();
     await trigger.click();
-    await page
+    if (repairRoot) await row.getByText(/^result$/i, { exact: true }).scrollIntoViewIfNeeded();
+    await row
       .getByText(leadDenied ? /未执行：本次操作未获批准/ : /原生执行回执/)
       .first()
       .waitFor();
     const body = await row.innerText();
+    if (task.title === "原生退出码") {
+      // CodeViewer使用Shadow DOM，父节点innerText不含实际代码；定位器穿透后核对可见回执。
+      await row
+        .getByText(/"reportedExitCode"\s*:\s*7\s*[,}]/)
+        .first()
+        .waitFor();
+    }
+    await fs.writeFile(`${root}/${task.title}-text.txt`, body);
     assert(body.includes(leadDenied ? "未执行" : "原生执行回执"), "状态必须位于原工具详情内");
     assert(
-      body.includes(
-        leadDenied
-          ? "未执行"
-          : task.title === "副手拒绝"
-            ? "not-executed"
-            : task.title === "执行中断"
-              ? "interrupted"
-              : task.title === "成功回执"
-                ? "3 checks passed"
-                : task.title === "警告回执"
-                  ? "WARN: optional fixture notice"
-                  : historyRoot
-                    ? "FAIL: fixture"
-                    : "FAIL: intentional fixture",
-      ),
+      task.title === "原生退出码"
+        ? await row
+            .getByText(/"reportedExitCode"\s*:\s*7\s*[,}]/)
+            .first()
+            .isVisible()
+        : body.includes(
+            repairRoot
+              ? task.title === "原生退出码"
+                ? '"reportedExitCode":7'
+                : "PASS: REPAIRED"
+              : leadDenied
+                ? "未执行"
+                : task.title === "副手拒绝"
+                  ? "not-executed"
+                  : task.title === "执行中断"
+                    ? "interrupted"
+                    : task.title === "成功回执"
+                      ? "3 checks passed"
+                      : task.title === "警告回执"
+                        ? "WARN: optional fixture notice"
+                        : historyRoot
+                          ? "FAIL: fixture"
+                          : "FAIL: intentional fixture",
+          ),
     );
+    if (task.title === "修复回执") {
+      const receipt = task.events.findLast(
+        (e: { role: string; kind: string }) => e.role === "sidekick" && e.kind === "verification",
+      );
+      assert(receipt && !receipt.text.includes("FAIL: OLD"));
+      // 模型可在报告中比较修复前后；只核对当前结构化回执，不把合法历史说明误判为串位。
+      await row.getByText(`原生执行回执：${receipt.text}`, { exact: false }).first().waitFor();
+    }
     await row.screenshot({ path: `${root}/${task.title}.png`, animations: "disabled" });
     results.push({ title: task.title, passed: true });
   }
