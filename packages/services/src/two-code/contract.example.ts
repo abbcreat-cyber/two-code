@@ -25,6 +25,11 @@ export const explicitAstraThinking = normalizeThinkingSelection({
   harness: "pi",
   model: "gpt-6-astra",
 });
+export const explicitStepThinking = normalizeThinkingSelection({
+  harness: "step-code",
+  provider: "step-plan",
+  model: "step-5-preview",
+});
 
 export async function createPair(service: ITwoCodeService, workspacePath: string) {
   return service.create({

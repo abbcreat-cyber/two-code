@@ -61,7 +61,8 @@ export function RoleModelPopover({
       setSaving(false);
     }
   };
-  const save = (next: EngineSelection, close: boolean) => apply(() => onChange(next), close);
+  const save = (next: EngineSelection, close: boolean) =>
+    apply(() => onChange(normalizeThinkingSelection(next, catalog)), close);
   return (
     <Popover
       open={open}
@@ -175,7 +176,7 @@ export function RoleModelPopover({
               title={`${m.connection} · ${m.selection.model ?? "默认"}`}
               disabled={disabled || saving || !m.available}
               className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-menu-hover focus-visible:bg-menu-hover focus-visible:outline-none disabled:opacity-50"
-              onClick={() => void save(chooseModel(selection, m.selection), true)}
+              onClick={() => void save(chooseModel(selection, m.selection, catalog), true)}
             >
               <span className="min-w-0 flex-1 break-words text-ui-base">{m.name}</span>
               {!none && m.selected && <Check className="size-4 shrink-0" />}

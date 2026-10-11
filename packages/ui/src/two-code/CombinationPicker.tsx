@@ -16,23 +16,20 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu.js";
 import { useTwoCodeCombinations } from "@/hooks/useTwoCodeCombinations.js";
-import { selectedModelName, sameModel, thinkingLabels } from "./modelChoices.js";
+import { selectedModelName, thinkingLabels } from "./modelChoices.js";
+import {
+  combinationSelection,
+  matchesCombination,
+  normalizeCombination,
+} from "./combinationPreferences.js";
 import { CombinationAddMenu } from "./CombinationAddMenu.js";
 import { CombinationEditor } from "./CombinationEditor.js";
 
-function matches(a: TwoCodePreferences, b: TwoCodePreferences) {
-  return (
-    a.dual === b.dual &&
-    (a.mode ?? "build") === (b.mode ?? "build") &&
-    (a.dual ? (["lead", "sidekick"] as const) : (["lead"] as const)).every(
-      (role) =>
-        sameModel(a[role], b[role]) && (a[role].thinking ?? "") === (b[role].thinking ?? ""),
-    )
-  );
-}
 function Summary({ value, catalog }: { value: TwoCodePreferences; catalog: HarnessInfo[] }) {
-  const name = (role: ActorRole) =>
-    `${selectedModelName(catalog, value[role])}${value[role].thinking ? ` · ${thinkingLabels[value[role].thinking!] ?? value[role].thinking}` : ""}`;
+  const name = (role: ActorRole) => {
+    const selection = combinationSelection(value, role, catalog);
+    return `${selectedModelName(catalog, selection)}${selection.thinking ? ` · ${thinkingLabels[selection.thinking] ?? selection.thinking}` : ""}`;
+  };
   return (
     <span className="flex min-w-0 items-center gap-2 text-ui-xs text-foreground-subtle">
       <span className="min-w-0 flex-1 truncate" title={name("lead")}>
@@ -85,8 +82,8 @@ export function CombinationPicker({
   const disabled = locked || library.busy;
   const items = library.view?.items ?? [];
   const active = (
-    items.find((c) => c.id === preferred && matches(c.preferences, value)) ??
-    items.find((c) => matches(c.preferences, value))
+    items.find((c) => c.id === preferred && matchesCombination(c.preferences, value, catalog)) ??
+    items.find((c) => matchesCombination(c.preferences, value, catalog))
   )?.id;
   const begin = (kind: NonNullable<typeof editing>["kind"], item?: TwoCodeCombination) => {
     setName(item?.name ?? (kind === "custom" ? customName : newName));
@@ -118,9 +115,9 @@ export function CombinationPicker({
                 id: item?.id,
                 name: kind === "replace" ? item!.name : name,
                 ...(kind === "custom"
-                  ? { preferences: custom }
+                  ? { preferences: normalizeCombination(custom!, catalog) }
                   : kind === "save" || kind === "replace"
-                    ? { preferences: snapshot }
+                    ? { preferences: normalizeCombination(snapshot, catalog) }
                     : {}),
               });
         if (kind === "save") setNewName("");

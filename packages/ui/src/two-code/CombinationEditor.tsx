@@ -77,7 +77,7 @@ export function CombinationEditor({
                     onChange({
                       ...value,
                       ...(role === "sidekick" ? { dual: true } : {}),
-                      [role]: chooseModel(selection, next.selection),
+                      [role]: chooseModel(selection, next.selection, catalog),
                     });
                 }}
               >

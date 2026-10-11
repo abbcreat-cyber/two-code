@@ -2,6 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { chooseModel, modelChoices, sameModel } from "./modelChoices.js";
 import type { EngineSelection, HarnessInfo } from "@zcode/services";
+
+test("切换到不透明模型ID时按catalog真实上游归一档位", () => {
+  const catalog: HarnessInfo[] = [
+    {
+      id: "claude-code",
+      name: "Claude Code",
+      available: true,
+      detail: "",
+      models: [{ id: "opaque-id", name: "本机模型", realModel: "deepseek-v4.1-flash" }],
+    },
+  ];
+  const current: EngineSelection = {
+    harness: "step-code",
+    model: "step-5-preview",
+    thinking: "medium",
+  };
+  assert.equal(
+    chooseModel(current, { harness: "claude-code", model: "opaque-id" }, catalog).thinking,
+    "high",
+  );
+});
 test("same model IDs on different connections retain identity and unsupported choices never alter harness", () => {
   const current: EngineSelection = {
     harness: "pi",

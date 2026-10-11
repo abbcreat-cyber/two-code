@@ -7,6 +7,8 @@ interface ThinkingSelection {
 }
 interface ThinkingHarness {
   id: string;
+  defaultProvider?: string;
+  defaultModel?: string;
   models: Array<{
     id: string;
     provider?: string;
@@ -24,8 +26,15 @@ export interface ModelThinkingProfile {
   source: string;
 }
 const openai = "https://developers.openai.com/api/docs/models/";
-/** 官方文档快照，核对日期2026-10-10。更新资料时同步spec中的来源表。 */
+/** 已核实能力快照，来源与核对日期见spec；Step使用原生RPC能力而非通用菜单。 */
 export const modelThinkingProfiles: readonly ModelThinkingProfile[] = [
+  {
+    id: "step-5-preview",
+    aliases: ["step-5-preview"],
+    levels: ["low", "medium", "high"],
+    initial: "medium",
+    source: "Step Code native get_available_models, verified 2026-10-11",
+  },
   ...["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"].map((id) => ({
     id,
     aliases: [id],
@@ -77,13 +86,15 @@ export function selectionThinkingProfile(
   selection: ThinkingSelection,
   catalog: ThinkingHarness[] = [],
 ) {
-  const match = catalog
-    .find((h) => h.id === selection.harness)
-    ?.models.find(
-      (m) =>
-        (m.provider ?? "") === (selection.provider ?? "") &&
-        (m.id === selection.model || m.aliases?.includes(selection.model ?? "")),
-    );
+  const harness = catalog.find((h) => h.id === selection.harness);
+  const match = harness?.models.find(
+    (m) =>
+      (m.provider ?? "") ===
+        (selection.provider ?? (!selection.model ? harness.defaultProvider : undefined) ?? "") &&
+      (m.id === selection.model ||
+        m.aliases?.includes(selection.model ?? "") ||
+        (!selection.model && m.id === harness.defaultModel)),
+  );
   return findModelThinkingProfile(
     match?.realModel,
     match?.id,
@@ -102,6 +113,15 @@ export function normalizeThinkingSelection<T extends ThinkingSelection>(
   if (value === "off" || value === "disabled" || value === "none")
     value = profile.levels.includes("disabled") ? "disabled" : "none";
   if (profile.id.startsWith("mimo-")) value = value === "disabled" ? "disabled" : "enabled";
+  else if (profile.id === "step-5-preview")
+    // Step原生不支持关闭或最高；迁移为真实边界档位，避免UI与执行值不一致。
+    value =
+      (
+        { none: "low", minimal: "low", xhigh: "high", max: "high", ultra: "high" } as Record<
+          string,
+          string
+        >
+      )[value ?? ""] ?? value;
   else if (profile.id.startsWith("deepseek-"))
     value =
       ({ minimal: "low", medium: "high", xhigh: "high", ultra: "max" } as Record<string, string>)[

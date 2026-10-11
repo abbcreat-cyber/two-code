@@ -1,3 +1,4 @@
+import { verifyStepThinking, verifyResumedThinking } from "./two-code-thinking-ui.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -119,6 +120,8 @@ try {
     await page.getByTestId(`two-code-${role}-model`).click();
   }
   checks.push("model-search-removed");
+  await verifyStepThinking(page, root);
+  checks.push("step-thinking-three-levels");
   const unchangedLead = await page.getByTestId("two-code-lead-model").getAttribute("title");
   const unchangedSidekick = await page.getByTestId("two-code-sidekick-model").getAttribute("title");
   const unchangedDefault = await store.read();
@@ -132,6 +135,8 @@ try {
   assert.equal(await page.getByRole("option").filter({ hasText: "Step-5 订阅" }).count(), 1);
   await page.getByRole("listbox").screenshot({ path: `${root}/custom-models.png` });
   await page.getByRole("option").filter({ hasText: "Step-5 API" }).click();
+  await page.getByRole("combobox", { name: "自定义主手思考档位", exact: true }).click();
+  await page.getByRole("option", { name: "高", exact: true }).click();
   await page.getByRole("combobox", { name: "自定义副手模型", exact: true }).click();
   await page.getByRole("option", { name: "无", exact: true }).click();
   assert(
@@ -148,6 +153,7 @@ try {
   const customSaved = (await store.combinations()).items.find((c) => c.name === "自定义单模型")!;
   assert.equal(customSaved.preferences.dual, false);
   assert.equal(customSaved.preferences.mode, "plan");
+  assert.equal(customSaved.preferences.lead.thinking, "high");
   assert.notEqual(customSaved.preferences.lead.provider, "step-plan");
   assert.deepEqual(await store.read(), unchangedDefault);
   assert.equal(await page.getByTestId("two-code-lead-model").getAttribute("title"), unchangedLead);
@@ -270,6 +276,10 @@ try {
   await close();
   await use("日常协作");
   if (process.env.TWO_CODE_COMBINATIONS_LIVE === "1") {
+    await page.getByTestId("two-code-lead-model").click();
+    await page.getByRole("combobox", { name: "主手思考档位", exact: true }).click();
+    await page.getByRole("option", { name: "低", exact: true }).click();
+    await page.getByTestId("two-code-lead-model").click();
     await page
       .getByTestId("two-code-composer")
       .fill(
@@ -289,11 +299,14 @@ try {
     const task = all.find((t) => t.lead.lastReport?.includes("PAIR_OK"));
     assert(task);
     assert.equal(task.lead.selection.provider, "step-plan");
+    assert.equal(task.lead.selection.thinking, "low");
     assert.equal(task.sidekick.selection.thinking, "high");
     assert.match(task.lead.lastReport, /PAIR_OK/);
     assert(task.events.some((e: { kind: string }) => e.kind === "handoff_report"));
     await fs.writeFile(`${root}/real-task.json`, JSON.stringify(task, null, 2));
     checks.push("real-pair");
+    await verifyResumedThinking(page, root, task);
+    checks.push("real-thinking-change-preserves-context");
     await page.getByTestId("conversation-new-task").click();
     await page.getByTestId("two-code-sidekick-model").waitFor();
     await page.waitForFunction(() =>

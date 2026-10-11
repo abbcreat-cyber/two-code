@@ -67,9 +67,16 @@ export function modelChoices(catalog: HarnessInfo[], current: EngineSelection) {
 export function selectedModelName(catalog: HarnessInfo[], selection: EngineSelection): string {
   return modelChoices(catalog, selection).find((m) => m.selected)!.name;
 }
-export function chooseModel(current: EngineSelection, next: EngineSelection): EngineSelection {
-  return normalizeThinkingSelection({
-    ...next,
-    thinking: current.thinking,
-  });
+export function chooseModel(
+  current: EngineSelection,
+  next: EngineSelection,
+  catalog: HarnessInfo[] = [],
+): EngineSelection {
+  return normalizeThinkingSelection(
+    {
+      ...next,
+      thinking: current.thinking,
+    },
+    catalog,
+  );
 }
