@@ -2,6 +2,10 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
+终态在适配器关闭、持久化和租约释放后广播，完成事件可立即接受续问；进入终态提交后的停止只等待提交，不倒改结果。TaskEvent可选toolCallId/notExecuted保存原生开场门禁的未执行回执，旧事件无此字段仍可读取。
+
+Step主手移植阶跃星辰1.0.10的提前开场流：原生同模型、无工具、有界短请求后沿用原档位主请求，一轮最多一次。两角色共享单一定义的沟通规则，副手不增加开场请求。来源、豁免、取消与验收见specs/two-code/opening-communication.md。
+
 调用方经contract访问catalog/list/create/read/submit/cancel/respond及onDidChange。运行中不接受第二条普通输入；取消后显式续接保留角色会话。重复requestId不重复执行。副手能力只注入主手，不允许跨任务派工。读者不得把completed当作品质验收。
 
 UI重开先读快照再消费单调序号变化。Host重启将未完成任务标为可恢复错误，禁止自动重跑。权限等待随取消结束；晚到结果不得覆盖取消。持久化失败必须显式报错。

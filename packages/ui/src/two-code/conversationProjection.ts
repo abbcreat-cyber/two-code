@@ -5,6 +5,7 @@ import type { ConversationRow, ToolCallRow, TurnHeaderRow } from "@zcode/shared/
 export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
   if (!task) return [];
   const rows: ConversationRow[] = [];
+  const toolActivities = new Map<string, Extract<ConversationRow, { kind: "timelineMarker" }>>();
   let turnId = "",
     header: TurnHeaderRow | undefined,
     handoff: ToolCallRow | undefined;
@@ -55,6 +56,7 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       continue;
     }
     if (event.role === "user" && event.kind === "message") {
+      toolActivities.clear();
       if (header?.state === "running") {
         header.state = "completedSuccess";
         // 兼容没有结束标记的旧数据，也只能取上一条活动时间，不能计入聊天间隔。
@@ -116,13 +118,24 @@ export function projectTwoCodeRows(task?: TwoCodeTask): ConversationRow[] {
       }
     } else if (event.kind === "tool") {
       message = undefined;
-      if (!/sidekick/.test(event.text))
-        rows.push({
+      const previous = event.toolCallId ? toolActivities.get(event.toolCallId) : undefined;
+      if (event.notExecuted && previous?.marker.type === "harnessActivity") {
+        previous.marker.label = `${previous.marker.label.replace(/^调用工具 · /, "")} · ${event.text}`;
+        continue;
+      }
+      if (!/sidekick/.test(event.text)) {
+        const activity: Extract<ConversationRow, { kind: "timelineMarker" }> = {
           ...base(),
           kind: "timelineMarker",
           lane: "assistantWork",
-          marker: { type: "harnessActivity", label: `调用工具 · ${event.text}` },
-        });
+          marker: {
+            type: "harnessActivity",
+            label: event.notExecuted ? event.text : `调用工具 · ${event.text}`,
+          },
+        };
+        rows.push(activity);
+        if (event.toolCallId) toolActivities.set(event.toolCallId, activity);
+      }
     } else if (
       event.role === "lead" &&
       event.kind === "status" &&

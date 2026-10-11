@@ -16,6 +16,49 @@ const base: TwoCodeTask = {
   requestIds: [],
   events: [],
 };
+
+test("开场门禁回执将原工具尝试改为未执行，重放不重复也不伪造成功", () => {
+  const task = structuredClone(base);
+  task.events = [
+    { seq: 1, at: task.updatedAt, role: "user", kind: "message", text: "检查文件" },
+    {
+      seq: 2,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool",
+      text: "read_file",
+      toolCallId: "native-one",
+    },
+    {
+      seq: 3,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool",
+      text: "工具尚未执行，等待补充开场说明。",
+      toolCallId: "native-one",
+      notExecuted: true,
+    },
+    { seq: 4, at: task.updatedAt, role: "lead", kind: "message", text: "我先检查指定文件。" },
+    {
+      seq: 5,
+      at: task.updatedAt,
+      role: "lead",
+      kind: "tool",
+      text: "read_file",
+      toolCallId: "native-two",
+    },
+  ];
+  const rows = projectTwoCodeRows(JSON.parse(JSON.stringify(task)));
+  rows.forEach((r) => conversationRowSchema.parse(r));
+  const tools = rows.filter(
+    (r) => r.kind === "timelineMarker" && r.marker.type === "harnessActivity",
+  );
+  assert.equal(tools.length, 2);
+  assert.equal(tools[0]!.rowId, 20);
+  assert.match(JSON.stringify(tools[0]), /工具尚未执行/);
+  assert(!JSON.stringify(tools[0]).includes("success"));
+  assert.match(JSON.stringify(tools[1]), /调用工具 · read_file/);
+});
 test("native rows preserve identities during streaming and render handoff without duplicating child text", () => {
   const task = structuredClone(base);
   const add = (

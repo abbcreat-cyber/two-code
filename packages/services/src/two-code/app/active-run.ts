@@ -15,4 +15,5 @@ export interface ActiveRun {
   admission?: Promise<void>;
   release?: () => Promise<void>;
   duplicate?: boolean;
+  committing?: boolean;
 }

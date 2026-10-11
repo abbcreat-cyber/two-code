@@ -56,6 +56,8 @@ const schema = z.object({
       role: z.enum(["lead", "sidekick", "user", "system"]),
       kind: z.enum(["message", "reasoning", "tool", "status", "error", "handoff"]),
       text: z.string(),
+      toolCallId: z.string().optional(),
+      notExecuted: z.boolean().optional(),
     }),
   ),
 });

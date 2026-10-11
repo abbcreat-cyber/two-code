@@ -9,6 +9,7 @@ import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { subscriptionEnvironment } from "./chatgpt-subscription.js";
 import { piThinkingLevel } from "../domain/thinking.js";
 import { handleExtensionUi } from "./pi-extension-ui.js";
+import { writeStepOpeningExtension } from "./step-opening.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -100,6 +101,8 @@ export class PiAdapter implements HarnessAdapter {
         connectionEnvironment = { STEP_CODING_AGENT_DIR: agentDir, STEPCODE_CONFIG_DIR: configDir };
       } else connectionEnvironment = { PI_CODING_AGENT_DIR: configDir };
     }
+    // 开场门禁必须先于权限与派工桥；静默工具不能先执行再补说明。
+    if (step) args.push("--extension", await writeStepOpeningExtension(input.sessionDir));
     {
       this.bridge = new ToolBridge(input);
       await this.bridge.start();
@@ -122,6 +125,7 @@ export class PiAdapter implements HarnessAdapter {
           ELECTRON_RUN_AS_NODE: "1",
           ...toolEnvironment,
           ...connectionEnvironment,
+          TWO_CODE_ACTOR_ROLE: input.role ?? "lead",
         },
       },
     );
@@ -198,6 +202,16 @@ export class PiAdapter implements HarnessAdapter {
     await this.start(input);
     const registered = await this.request("get_commands");
     if (
+      this.harness === "step-code" &&
+      (!Array.isArray(registered.commands) ||
+        !registered.commands.some(
+          (command: Json) =>
+            command.name === "two-code-step-opening" &&
+            command.description === "Two Code Step opening v1",
+        ))
+    )
+      throw new Error("Step Code开场扩展未加载，拒绝启动模型任务");
+    if (
       !Array.isArray(registered.commands) ||
       !registered.commands.some(
         (command: Json) =>
@@ -213,6 +227,7 @@ export class PiAdapter implements HarnessAdapter {
     if (model.id) await input.emit({ kind: "model", text: `${model.provider ?? ""}/${model.id}` });
     let text = "",
       lastError: string | undefined;
+    let openingFailure: string | undefined;
     const usage = {
       inputTokens: 0,
       outputTokens: 0,
@@ -284,18 +299,44 @@ export class PiAdapter implements HarnessAdapter {
       } else if (record.type === "tool_execution_start") {
         tools.set(String(record.toolCallId), performance.now());
         void input
-          .emit({ kind: "tool", text: String(record.toolName ?? "工具执行") })
+          .emit({
+            kind: "tool",
+            text: String(record.toolName ?? "工具执行"),
+            toolCallId: String(record.toolCallId),
+          })
           .catch(rejectRun);
       } else if (record.type === "tool_execution_end") {
         const start = tools.get(String(record.toolCallId));
         if (start) usage.toolMs += performance.now() - start;
         tools.delete(String(record.toolCallId));
+        const result =
+          typeof record.result === "string"
+            ? record.result
+            : contentText(object(record.result).content);
+        if (record.isError && /\[desktop-opening-(required|stopped)\]/.test(result)) {
+          const stopped = result.includes("[desktop-opening-stopped]");
+          const notice = stopped
+            ? "工具未执行：缺少开场说明，本轮已停止。"
+            : "工具尚未执行，等待补充开场说明。";
+          if (stopped) openingFailure = notice;
+          // SDK的start早于tool_call门禁；保存拒绝回执，不能把尝试显示成实际执行。
+          void input
+            .emit({
+              kind: "tool",
+              text: notice,
+              toolCallId: String(record.toolCallId),
+              notExecuted: true,
+            })
+            .catch(rejectRun);
+        }
       } else if (record.type === "extension_ui_request") {
         void handleExtensionUi(record, input, this.label, (response) => {
           this.child?.stdin.write(JSON.stringify(response) + "\n");
         }).catch(rejectRun);
-      } else if (record.type === "agent_settled")
-        lastError ? rejectRun(new Error(lastError)) : resolveRun();
+      } else if (record.type === "agent_settled") {
+        if (openingFailure || lastError) rejectRun(new Error(openingFailure ?? lastError));
+        else resolveRun();
+      }
     };
     const abort = () => {
       void this.cancel();

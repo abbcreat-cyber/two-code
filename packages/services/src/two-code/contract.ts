@@ -57,6 +57,8 @@ export interface HarnessInfo {
   }>;
 }
 export interface TaskEvent {
+  toolCallId?: string;
+  notExecuted?: boolean;
   seq: number;
   at: string;
   role: ActorRole | "user" | "system";

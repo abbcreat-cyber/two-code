@@ -6,12 +6,16 @@ import type {
   TwoCodePreferences,
   TwoCodeMode,
   RunUsage,
+  ActorRole,
 } from "../contract.js";
 export interface EngineEvent {
+  toolCallId?: string;
+  notExecuted?: boolean;
   kind: "message" | "reasoning" | "tool" | "session" | "model";
   text: string;
 }
 export interface EngineRun {
+  role?: ActorRole;
   connection?: EngineConnection;
   mode?: TwoCodeMode;
   usage?(usage: Omit<RunUsage, "id" | "role">): Promise<void>;

@@ -13,8 +13,10 @@ import type { CoordinatorDependencies, EngineReport } from "./ports.js";
 import type { ActiveRun } from "./active-run.js";
 import { parsePreferences } from "../domain/snapshot.js";
 import { permissionDecision } from "./permission-policy.js";
+import { withCommunicationPolicy } from "../domain/communication.js";
 import { admitTask } from "./admission.js";
 import { recoverTask } from "./recovery.js";
+import { settleRun } from "./settlement.js";
 import {
   appendEvent,
   leadInstruction,
@@ -62,8 +64,14 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     if (!task) throw new Error("任务不存在");
     return task;
   }
-  private emit(task: TwoCodeTask, role: TaskEvent["role"], kind: TaskEvent["kind"], text: string) {
-    appendEvent(task, { role, kind, text }, new Date().toISOString());
+  private emit(
+    task: TwoCodeTask,
+    role: TaskEvent["role"],
+    kind: TaskEvent["kind"],
+    text: string,
+    details?: Pick<TaskEvent, "toolCallId" | "notExecuted">,
+  ) {
+    appendEvent(task, { role, kind, text, ...details }, new Date().toISOString());
     this.changes.fire(copy(task));
   }
   catalog = () => this.deps.catalog();
@@ -234,6 +242,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     try {
       const usageId = randomUUID();
       const report = await adapter.run({
+        role,
         connection: run.connections?.[role],
         mode: task.mode ?? "build",
         usage: async (usage) => {
@@ -251,13 +260,14 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
         selection: actor.selection,
         sessionId: actor.sessionId,
         prompt,
-        systemPrompt:
+        systemPrompt: withCommunicationPolicy(
           (role === "sidekick"
             ? sidekickInstruction
             : task.dual
               ? leadInstruction
               : "所有面向用户的输出一律中文。核对真实证据后汇报。") +
-          `\n本次真实工作目录：${task.workspacePath}。主副手共享此目录；此目录中的绝对路径与相对路径指向同一工作区，不需为确认目录另执行命令。`,
+            `\n本次真实工作目录：${task.workspacePath}。主副手共享此目录；此目录中的绝对路径与相对路径指向同一工作区，不需为确认目录另执行命令。`,
+        ),
         signal: run.abort.signal,
         emit: async (event) => {
           if (run.abort.signal.aborted || this.active.get(task.id) !== run) return;
@@ -266,7 +276,11 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
             await this.deps.store.save(task);
             this.changes.fire(copy(task));
           } else if (event.kind === "model") actor.actualModel = event.text;
-          else this.emit(task, role, event.kind, event.text);
+          else
+            this.emit(task, role, event.kind, event.text, {
+              toolCallId: event.toolCallId,
+              notExecuted: event.notExecuted,
+            });
         },
         permission: (title, detail) => this.requestPermission(task, run, role, title, detail),
         ...(role === "lead" && task.dual
@@ -321,6 +335,8 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     return `${report}\n\n主手须核对原始要求和产物；执行结束不等于验收通过。`;
   }
   private async runLead(task: TwoCodeTask, run: ActiveRun, prompt: string): Promise<void> {
+    let outcome: TwoCodeTask["status"] = "completed";
+    let failure: string | undefined;
     try {
       await this.execute(task, run, "lead", prompt);
       if (run.sidekick && task.sidekick.status === "running") {
@@ -333,29 +349,17 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
         throw new Error("主手尚未调用read_sidekick取得副手报告，本轮未完成");
       }
       this.current(task, run);
-      task.status = "completed";
     } catch (error) {
-      task.status = run.abort.signal.aborted ? "cancelled" : "error";
+      outcome = run.abort.signal.aborted ? "cancelled" : "error";
       // 主动停止已有取消事件，不能把适配器的abort异常当作运行失败回传到界面。
-      task.error = task.status === "cancelled" ? undefined : errorText(error);
-      if (task.error) this.emit(task, "system", "error", task.error);
+      failure = outcome === "cancelled" ? undefined : errorText(error);
+      if (failure) this.emit(task, "system", "error", failure);
       run.abort.abort();
     } finally {
-      for (const resolve of run.permissions.values()) resolve(false);
-      run.permissions.clear();
-      task.permissions = [];
-      await Promise.allSettled([...run.actors.values()].map((adapter) => adapter.close()));
-      for (const role of ["lead", "sidekick"] as const) {
-        if (task[role].status === "running") task[role].status = "cancelled";
-      }
-      try {
-        await this.deps.store.save(task);
-      } catch (error) {
-        task.status = "error";
-        task.error = `执行状态未能保存，请勿重复运行：${errorText(error)}`;
-      }
+      const finished = await settleRun(this.deps, task, run, outcome, failure);
+      task.status = finished.status;
+      task.error = finished.error;
       if (this.active.get(task.id) === run) this.active.delete(task.id);
-      await run.release?.();
       this.changes.fire(copy(task));
     }
   }
@@ -366,13 +370,17 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       if (task.status === "running") throw new Error("此任务正在另一窗口执行，请在原窗口停止");
       return copy(task);
     }
+    // 原生执行器已关闭，终态写入中；停止只等待提交，不能把已完成结果改写为取消。
+    if (run.committing) {
+      await run.work;
+      return copy(task);
+    }
     run.abort.abort();
     for (const resolve of run.permissions.values()) resolve(false);
     run.permissions.clear();
     task.permissions = [];
     // 启动阶段由准入事务在读完最新快照后写取消；提前改内存会被迟到读取覆盖。
     if (run.work) {
-      task.status = "cancelled";
       this.emit(task, "system", "status", "正在停止主手与副手");
     }
     await run.admission?.catch(() => undefined);
