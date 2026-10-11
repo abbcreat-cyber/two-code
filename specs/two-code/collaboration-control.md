@@ -73,3 +73,5 @@ update → 检查run generation → tracker快照未结束调用ID → native in
 - `D:/Apps/TwoCode/qa/common-boundaries-1791719859417`：计划模式下副手Write被明确记为notExecuted，requested.json不存在；配置切至edit后同一主副手session正常创建目标文件。另一并行任务连续处理one.json、two.json，产物各自保留FIRST/11与SECOND/22，第二次交接未覆盖one-result.json，两份输入逐字不变。
 
 本组未发现新的协调/适配运行时缺陷，未更改模型提示词或产品行为，桌面继续使用0.8.20。新增常用边界和同名图片更新的真实回归脚本；typecheck、lint及架构检查通过，lint0错误/原有70警告。所有模型测试和图片夹具在D盘隔离目录中完成，没有操作用户鼠标或键盘。
+
+0.8.20第五组真实协作复验：`D:/Apps/TwoCode/qa/fusion-live-1791720102775`在副手命令实际开始后提交修改要求，同一副手收到handoff_update，原工具回执interrupted，改用Write完成updated.txt；原脚本只启动一次，超过原定45秒后late.txt仍不存在。updateMs=47471包含等待迟到副作用的观察窗口，不是模型响应耗时。`D:/Apps/TwoCode/qa/fork-files-1791720114658`原任务/分支并发文件协作通过，细节见session-fork.md。本组未发现新的运行时缺陷，未改产品或提示词；typecheck、lint、架构检查通过，lint0错误/原有70警告。
