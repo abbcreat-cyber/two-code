@@ -37,6 +37,16 @@ Step原生browser / Claude MCP browser
 
 ## 多标签、恢复与任务隔离回归
 
+下一组验收复用同一个离屏完整包与权限循环：副手选择原生select选项、将checkbox设为指定状态并重复设置确认幂等，填写textarea，提交后由服务端独立记录字段与change/input次数；主手只读复核。随后在同一tab跳转详情页并以back/forward真实历史命令往返，两角色沿用原session。最后按钮替换原textarea DOM，旧快照ref必须拒绝且不能写到新元素；副手重新snapshot取得新ref后可填写并保存。测试页拥有服务端账本，应用Main仍是标签及历史的唯一所有者。脚本不新增产品状态或特殊工具，不用模型结论替代账本与原生工具证据。
+
+真实历史测试发现back/forward回执的state.url滞后，下一次snapshot才正确。历史动作必须在同一guest注册主框架导航事件后触发；跨文档等待did-finish-load，同文档等待did-navigate-in-page，随后返回真实state。无对应历史条目时维持无操作成功；导航失败、guest销毁、取消或10秒预算耗尽明确返回错误并清理监听器。沿用当前guest身份守卫和既有导航预算；不插入固定睡眠、重试或额外snapshot。click仅表示输入已派发，潜在链接导航仍由随后snapshot确认，本轮不扩大为通用点击自动等待。
+
+```text
+Main当前guest → 先订阅导航事件 → 原生goBack/goForward
+  → 主框架完成/同文档提交 → 读取state → 主副手回执
+  → 失败/取消/销毁/预算耗尽 → 清理监听 → 错误回执
+```
+
 在同一真实桌面Host创建A/B两个内置标签，副手只改B，主手核验A未变及列表中两个真实tabId。第二阶段刷新B，验证服务端持久值仍可读；用明确不存在的ref做一次负向fill，要求ref_not_found且没有写入，然后重新snapshot取得真实ref继续修改。新建独立Two Code任务，主副手的list均不得看到A/B，使用旧任务tabId也必须失败；该负向测试不认领、不关闭旧任务页面。最后回到原任务，仅关闭B，确认A仍存在。
 
 验收器保存每次原生browser request和结构化result，结合页面服务端写入/加载账本与Electron guest清单校验；不靠最终回答判断隔离成功。仅测试本机随机端口测试页，每轮300秒截止，窗口离屏不可聚焦；结束后用既有所有权清理脚本删除试验会话。浏览器状态仍由Main唯一持有，不为验收增加产品缓存或特殊运行分支。
@@ -63,3 +73,13 @@ Step原生browser / Claude MCP browser
 模型曾把url附给newTab，被严格schema拒绝后自行改为newTab→navigate，没有产生额外标签；这是调用参数错误，未被伪装成后端执行成功。本轮没有因request对象/字符串形态发生拒绝。未执行的开场门禁尝试与两项预期负向结果单列，不按普通执行故障计。
 
 97项相关回归通过，常规typecheck、lint（0错误/原有70警告）和架构检查通过。没有扩展为所有站点或所有历史恢复场景的全面验收；恢复路径沿用既有逻辑，未声称本轮做过进程崩溃恢复测试。
+
+### 0.8.24 控件、历史与重绘接续结果
+
+最终完整包报告为`D:/Apps/TwoCode/reports/embedded-browser-1791729316932`。同一Step Plan主手与Claude DeepSeek副手、同一原生session和一个真实Electron webview完成三轮：控件54.9秒、历史53.1秒、重绘59.4秒。两次保存账本精确为`{priority:high,notify:true,note:控件协作4826,generation:1}`与`{priority:low,notify:false,note:重绘后接续7823,generation:2}`；重复check仅一次change；旧ref负向fill返回ref_not_found且没有产生“不应写入”事件。
+
+修复前`embedded-browser-1791728988912`的back/forward/back仅1–2毫秒就返回上一页URL；动作本身成功，但回执错误，已通过adjudication明确区别，不能按旧验收器的最终落点通过掩盖缺陷。新版三次回执分别49、51、49毫秒，URL依次为/a、/b、/a，均与实际到达页一致。页面GET账本严格为/a、/b、/a、/b、/a，无重试导航或额外标签。普通click仍只是输入派发回执，链接落点由snapshot确认；没有声称已实现所有点击自动导航等待。
+
+早期两次`embedded-browser-1791728784204`和`embedded-browser-1791728884036`因验收脚本错误读取state.tabId而提前结束，控件账本通过，后续未执行；已改读实际meta.tabId并保留判定记录。四个试验目录及所属原生会话均按所有权清理，精简报告保留。
+
+验证：60项相关自动回归通过（含新增历史时序、同文档、子框架、失败、取消、销毁和监听清理）；常规typecheck、lint（原有70警告/0错误）、架构检查与构建打包通过。额外Desktop Main类型检查仍有87条已有诊断，归一化行号后修复前后相同，未计为通过。同文档与异常路径为程序回归；真实模型验收覆盖本机HTTP跨文档历史及上述表单交接，不外推到任意网站或性能基准。

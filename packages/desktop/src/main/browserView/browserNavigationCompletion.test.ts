@@ -49,3 +49,22 @@ test("明确请求空白页以及真实重定向仍可成功", async () => {
     true,
   );
 });
+
+test("历史命令等待真实完成后读取落点，不能提前返回旧页面", async () => {
+  for (const method of ["back", "forward"] as const) {
+    const controlled = view("https://example.com/old");
+    let url = "https://example.com/old";
+    let finish!: () => void;
+    controlled.webContents.getURL = () => url;
+    controlled.webContents[method === "back" ? "goBack" : "goForward"] = async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      url = "https://example.com/new";
+    };
+    const pending = executeBrowserCommandOnView(controlled, { method });
+    finish();
+    const result = await pending;
+    assert.equal(result.state?.url, "https://example.com/new");
+  }
+});

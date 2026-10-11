@@ -8,8 +8,8 @@ export interface ControlledViewWebContents {
   getTitle(): string;
   canGoBack(): boolean;
   canGoForward(): boolean;
-  goBack(): void;
-  goForward(): void;
+  goBack(signal?: AbortSignal): void | Promise<void>;
+  goForward(signal?: AbortSignal): void | Promise<void>;
   reload(): void;
   /**
    * 在页面上下文执行脚本并返回最后一个表达式的值（结构化克隆）。

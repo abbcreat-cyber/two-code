@@ -25,6 +25,7 @@ import {
   type BrowserViewportSize,
 } from "@zcode/shared";
 import { executeBrowserCommandOnView, type ControlledView } from "./browserCommandExecutor.js";
+import { navigateBrowserHistory } from "./browserHistoryNavigation.js";
 import { executeIabPlaywrightLocator } from "./browserPlaywrightLocatorExecutor.js";
 import { recordBrowserVideo, type BrowserWebmRecorderFactory } from "./browserVideoRecorder.js";
 import { normalizePlaywrightTimeout } from "./browserPlaywrightTimeout.js";
@@ -3590,13 +3591,13 @@ export class BrowserGuestManager {
           assertCurrent();
           return guest.navigationHistory.canGoForward();
         },
-        goBack: () => {
+        goBack: (signal) => {
           assertCurrent();
-          return guest.navigationHistory.goBack();
+          return navigateBrowserHistory(guest, "back", signal);
         },
-        goForward: () => {
+        goForward: (signal) => {
           assertCurrent();
-          return guest.navigationHistory.goForward();
+          return navigateBrowserHistory(guest, "forward", signal);
         },
         reload: () => {
           assertCurrent();

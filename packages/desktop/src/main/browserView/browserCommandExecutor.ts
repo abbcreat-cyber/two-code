@@ -58,10 +58,10 @@ export async function executeBrowserCommandOnView(
       case "getState":
         return await handleGetState(view, done);
       case "back":
-        view.webContents.goBack();
+        await view.webContents.goBack(opts?.signal);
         return done({ ok: true, state: readState(view.webContents) });
       case "forward":
-        view.webContents.goForward();
+        await view.webContents.goForward(opts?.signal);
         return done({ ok: true, state: readState(view.webContents) });
       case "reload":
         view.webContents.reload();

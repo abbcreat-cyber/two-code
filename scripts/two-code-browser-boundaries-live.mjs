@@ -5,6 +5,10 @@ import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { _electron as electron } from "playwright-core";
 
+const forms = process.argv.includes("--forms")
+  ? await import("./two-code-browser-forms-fixture.mjs")
+  : undefined;
+
 const root = `D:/Apps/TwoCode/qa/embedded-browser-${Date.now()}`;
 await fs.mkdir(`${root}/data`, { recursive: true });
 await fs.writeFile(
@@ -19,6 +23,7 @@ const values = { a: "A保持原状", b: "B初始" },
   permissions = [],
   errors = [];
 const server = createServer(async (req, res) => {
+  if (forms) return forms.serve(req, res, { writes, loads, inputs });
   const page = req.url?.split("/")[1];
   if (!["a", "b"].includes(page)) {
     res.writeHead(404).end();
@@ -156,7 +161,17 @@ async function settle(text, prior, id) {
       const method = body.match(/"method"\s*:\s*"([a-zA-Z]+)"/)?.[1];
       const allow =
         tool === "browser" &&
-        (["newTab", "fill", "click", "reload", "close"].includes(method) ||
+        ([
+          "newTab",
+          "fill",
+          "click",
+          "reload",
+          "close",
+          "select",
+          "check",
+          "back",
+          "forward",
+        ].includes(method) ||
           (method === "navigate" &&
             (body.includes(`${origin}/a`) || body.includes(`${origin}/b`))));
       permissions.push({ tool, method, allow });
@@ -213,117 +228,121 @@ try {
     w.showInactive();
   });
   console.log(JSON.stringify({ root, origin }));
-  const first = await run(
-    "tabs",
-    `多标签协作验收：主手用browser打开${origin}/a，snapshot记录A值并记录返回的tabId。交唯一副手调用newTab新开B（不能在A原标签导航），用返回的B tabId打开${origin}/b，snapshot取ref，fill备注“B副手已保存”并保存一次。主手最后带各自tabId分别snapshot A/B并list，确认两个标签都还在、A仍为“A保持原状”、B已保存。报告真实A/B tabId和结果。`,
-  );
-  assert.deepEqual(writes, [{ page: "b", value: "B副手已保存" }]);
-  assert(
-    first.native
-      .filter((e) => e.request.method === "navigate" && e.result?.ok)
-      .every((e) => e.result.state?.url && e.result.state.url !== "about:blank"),
-    "navigate不得把空白页作为成功返回",
-  );
-  assert(
-    inputs.every((i) => i.page === "b"),
-    "A页不得被输入操作修改",
-  );
-  assert.equal(values.a, "A保持原状");
-  const listing = first.native
-    .filter((e) => e.role === "lead" && e.request.method === "list" && e.result?.ok)
-    .at(-1)?.result.tabs;
-  assert.equal(listing?.length, 2, "必须有两个本任务标签");
-  const tabA = listing.find((t) => t.url === `${origin}/a` || t.url === `${origin}/a/`),
-    tabB = listing.find((t) => t.url === `${origin}/b` || t.url === `${origin}/b/`);
-  assert(tabA && tabB && tabA.tabId !== tabB.tabId);
-  assert(
-    first.native.some(
-      (e) => e.role === "sidekick" && e.request.method === "newTab" && e.result?.ok,
-    ),
-  );
-  const actorSessions = [first.task.lead.sessionId, first.task.sidekick.sessionId];
-  results.push({ name: "tabs", passed: true, elapsedMs: first.elapsedMs, tabA, tabB });
-  const beforeLoads = loads.filter((p) => p === "b").length;
-  const next = await run(
-    "recovery",
-    `继续同一任务：A=${tabA.tabId}，B=${tabB.tabId}。唯一副手先reload B并snapshot，核对刷新后仍为“B副手已保存”。随后做一次明确的负向测试：向B发送fill ref="qa-ref-missing" value="不应写入"，预期ref_not_found，不能改任何真实字段。收到预期错误后重新snapshot取得真实ref，fill为“B刷新后续接”并保存一次。主手最后分别snapshot A/B，A不得变化。不要新开标签、不要用navigate冒充reload。`,
-    first.task.id,
-  );
-  assert.deepEqual([next.task.lead.sessionId, next.task.sidekick.sessionId], actorSessions);
-  assert(loads.filter((p) => p === "b").length > beforeLoads);
-  assert(
-    next.native.some(
-      (e) =>
-        e.role === "sidekick" &&
-        e.request.method === "reload" &&
-        e.request.tabId === tabB.tabId &&
-        e.result?.ok,
-    ),
-  );
-  assert(inputs.every((i) => i.page === "b"));
-  assert.deepEqual(writes, [
-    { page: "b", value: "B副手已保存" },
-    { page: "b", value: "B刷新后续接" },
-  ]);
-  assert(!inputs.some((i) => i.value === "不应写入"));
-  assert(
-    next.native.some(
-      (e) => e.request.ref === "qa-ref-missing" && e.result?.error?.code === "ref_not_found",
-    ),
-  );
-  results.push({ name: "recovery", passed: true, elapsedMs: next.elapsedMs });
-  await page
-    .getByRole("button", { name: /^新建任务/ })
-    .first()
-    .click();
-  const isolated = await run(
-    "isolation",
-    `独立任务隔离验收：主手先browser list，本新任务应当没有受控标签。交唯一副手也list，并用browser getState tabId="${tabB.tabId}"做一次跨任务负向测试：此ID来自另一个测试任务，必须拒绝而不是读取页面内容。此动作仅测试拒绝，绝不认领、关闭或修改其他任务页。副手再list、主手最后list，都应仍为空。不要打开新页，不需要截图。报告真实错误代码和当前标签数量。`,
-  );
-  for (const role of ["lead", "sidekick"]) {
-    const lists = isolated.native.filter(
-      (e) => e.role === role && e.request.method === "list" && e.result,
+  if (forms) {
+    await forms.runScenarios({ run, origin, writes, inputs, results, app });
+  } else {
+    const first = await run(
+      "tabs",
+      `多标签协作验收：主手用browser打开${origin}/a，snapshot记录A值并记录返回的tabId。交唯一副手调用newTab新开B（不能在A原标签导航），用返回的B tabId打开${origin}/b，snapshot取ref，fill备注“B副手已保存”并保存一次。主手最后带各自tabId分别snapshot A/B并list，确认两个标签都还在、A仍为“A保持原状”、B已保存。报告真实A/B tabId和结果。`,
     );
-    assert(lists.length > 0);
-    assert(lists.every((e) => e.result?.ok && e.result.tabs?.length === 0));
+    assert.deepEqual(writes, [{ page: "b", value: "B副手已保存" }]);
+    assert(
+      first.native
+        .filter((e) => e.request.method === "navigate" && e.result?.ok)
+        .every((e) => e.result.state?.url && e.result.state.url !== "about:blank"),
+      "navigate不得把空白页作为成功返回",
+    );
+    assert(
+      inputs.every((i) => i.page === "b"),
+      "A页不得被输入操作修改",
+    );
+    assert.equal(values.a, "A保持原状");
+    const listing = first.native
+      .filter((e) => e.role === "lead" && e.request.method === "list" && e.result?.ok)
+      .at(-1)?.result.tabs;
+    assert.equal(listing?.length, 2, "必须有两个本任务标签");
+    const tabA = listing.find((t) => t.url === `${origin}/a` || t.url === `${origin}/a/`),
+      tabB = listing.find((t) => t.url === `${origin}/b` || t.url === `${origin}/b/`);
+    assert(tabA && tabB && tabA.tabId !== tabB.tabId);
+    assert(
+      first.native.some(
+        (e) => e.role === "sidekick" && e.request.method === "newTab" && e.result?.ok,
+      ),
+    );
+    const actorSessions = [first.task.lead.sessionId, first.task.sidekick.sessionId];
+    results.push({ name: "tabs", passed: true, elapsedMs: first.elapsedMs, tabA, tabB });
+    const beforeLoads = loads.filter((p) => p === "b").length;
+    const next = await run(
+      "recovery",
+      `继续同一任务：A=${tabA.tabId}，B=${tabB.tabId}。唯一副手先reload B并snapshot，核对刷新后仍为“B副手已保存”。随后做一次明确的负向测试：向B发送fill ref="qa-ref-missing" value="不应写入"，预期ref_not_found，不能改任何真实字段。收到预期错误后重新snapshot取得真实ref，fill为“B刷新后续接”并保存一次。主手最后分别snapshot A/B，A不得变化。不要新开标签、不要用navigate冒充reload。`,
+      first.task.id,
+    );
+    assert.deepEqual([next.task.lead.sessionId, next.task.sidekick.sessionId], actorSessions);
+    assert(loads.filter((p) => p === "b").length > beforeLoads);
+    assert(
+      next.native.some(
+        (e) =>
+          e.role === "sidekick" &&
+          e.request.method === "reload" &&
+          e.request.tabId === tabB.tabId &&
+          e.result?.ok,
+      ),
+    );
+    assert(inputs.every((i) => i.page === "b"));
+    assert.deepEqual(writes, [
+      { page: "b", value: "B副手已保存" },
+      { page: "b", value: "B刷新后续接" },
+    ]);
+    assert(!inputs.some((i) => i.value === "不应写入"));
+    assert(
+      next.native.some(
+        (e) => e.request.ref === "qa-ref-missing" && e.result?.error?.code === "ref_not_found",
+      ),
+    );
+    results.push({ name: "recovery", passed: true, elapsedMs: next.elapsedMs });
+    await page
+      .getByRole("button", { name: /^新建任务/ })
+      .first()
+      .click();
+    const isolated = await run(
+      "isolation",
+      `独立任务隔离验收：主手先browser list，本新任务应当没有受控标签。交唯一副手也list，并用browser getState tabId="${tabB.tabId}"做一次跨任务负向测试：此ID来自另一个测试任务，必须拒绝而不是读取页面内容。此动作仅测试拒绝，绝不认领、关闭或修改其他任务页。副手再list、主手最后list，都应仍为空。不要打开新页，不需要截图。报告真实错误代码和当前标签数量。`,
+    );
+    for (const role of ["lead", "sidekick"]) {
+      const lists = isolated.native.filter(
+        (e) => e.role === role && e.request.method === "list" && e.result,
+      );
+      assert(lists.length > 0);
+      assert(lists.every((e) => e.result?.ok && e.result.tabs?.length === 0));
+    }
+    assert(
+      isolated.native.some(
+        (e) => e.role === "sidekick" && e.request.tabId === tabB.tabId && e.result?.ok === false,
+      ),
+    );
+    assert.deepEqual(writes, [
+      { page: "b", value: "B副手已保存" },
+      { page: "b", value: "B刷新后续接" },
+    ]);
+    results.push({ name: "isolation", passed: true, elapsedMs: isolated.elapsedMs });
+    await page
+      .locator("[data-task-item-key], [data-grouped-task-key]")
+      .filter({ hasText: "多标签协作验收" })
+      .first()
+      .click();
+    const closed = await run(
+      "close",
+      `回到原任务。让同一副手只关闭B（browser close tabId="${tabB.tabId}"），必须保留A=${tabA.tabId}。副手list、主手list都应只剩A；主手snapshot A确认“A保持原状”。不新建标签、不修改内容。`,
+      first.task.id,
+    );
+    assert.deepEqual([closed.task.lead.sessionId, closed.task.sidekick.sessionId], actorSessions);
+    const finalList = closed.native
+      .filter((e) => e.role === "lead" && e.request.method === "list" && e.result?.ok)
+      .at(-1)?.result.tabs;
+    assert.deepEqual(
+      finalList?.map((t) => t.tabId),
+      [tabA.tabId],
+    );
+    const guestUrls = await app.evaluate(({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .filter((w) => w.getType() === "webview")
+        .map((w) => w.getURL()),
+    );
+    assert(guestUrls.includes(`${origin}/a`));
+    assert(!guestUrls.includes(`${origin}/b`));
+    results.push({ name: "close", passed: true, elapsedMs: closed.elapsedMs });
   }
-  assert(
-    isolated.native.some(
-      (e) => e.role === "sidekick" && e.request.tabId === tabB.tabId && e.result?.ok === false,
-    ),
-  );
-  assert.deepEqual(writes, [
-    { page: "b", value: "B副手已保存" },
-    { page: "b", value: "B刷新后续接" },
-  ]);
-  results.push({ name: "isolation", passed: true, elapsedMs: isolated.elapsedMs });
-  await page
-    .locator("[data-task-item-key], [data-grouped-task-key]")
-    .filter({ hasText: "多标签协作验收" })
-    .first()
-    .click();
-  const closed = await run(
-    "close",
-    `回到原任务。让同一副手只关闭B（browser close tabId="${tabB.tabId}"），必须保留A=${tabA.tabId}。副手list、主手list都应只剩A；主手snapshot A确认“A保持原状”。不新建标签、不修改内容。`,
-    first.task.id,
-  );
-  assert.deepEqual([closed.task.lead.sessionId, closed.task.sidekick.sessionId], actorSessions);
-  const finalList = closed.native
-    .filter((e) => e.role === "lead" && e.request.method === "list" && e.result?.ok)
-    .at(-1)?.result.tabs;
-  assert.deepEqual(
-    finalList?.map((t) => t.tabId),
-    [tabA.tabId],
-  );
-  const guestUrls = await app.evaluate(({ webContents }) =>
-    webContents
-      .getAllWebContents()
-      .filter((w) => w.getType() === "webview")
-      .map((w) => w.getURL()),
-  );
-  assert(guestUrls.includes(`${origin}/a`));
-  assert(!guestUrls.includes(`${origin}/b`));
-  results.push({ name: "close", passed: true, elapsedMs: closed.elapsedMs });
   assert.deepEqual(errors, []);
   await page.screenshot({ path: `${root}/finished.png` });
 } catch (error) {
