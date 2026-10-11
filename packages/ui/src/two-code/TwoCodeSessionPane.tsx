@@ -21,7 +21,7 @@ import { useTwoCodeImages } from "@/hooks/useTwoCodeImages.js";
 import { useTwoCodeComposerFeatures } from "@/hooks/useTwoCodeComposerFeatures.js";
 import { twoCodePromptHistory } from "./composerHistory.js";
 
-export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => void }) {
+export function TwoCodeSessionPane(props: SessionPaneProps) {
   const id = twoCodeTaskId(props.sessionId);
   const state = useTwoCode(props.workspacePath, id, (created, submittedText) => {
     const nextId = twoCodeSessionId(created);
@@ -243,12 +243,11 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
             <TwoCodeModelControls
               key={`${props.workspaceIdentity || props.workspacePath}:${id ?? "draft"}`}
               value={selection}
+              workspacePath={props.workspacePath}
               catalog={state.catalog}
               locked={busy || sending || state.loading || state.configuring || !!props.readOnly}
               onChange={state.savePreferences}
-              onSaveDefaults={state.saveDefaults}
               hasSessions={{ lead: !!task?.lead.sessionId, sidekick: !!task?.sidekick.sessionId }}
-              onNative={id ? undefined : props.onNative}
             />
           }
           submitControl={

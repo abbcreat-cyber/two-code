@@ -26,13 +26,14 @@ export function createTwoCodeService(
     process.env.TWO_CODE_HOME ??
     (process.platform === "win32" ? "D:/Apps/TwoCode/data" : join(homedir(), ".two-code"));
   const connections = new TwoCodeConnections(root);
+  const preferences = new JsonPreferences(root);
   const coordinator = new TwoCodeCoordinator({
     forkActors: (task, at, id) => forkNativeActors(task, at, join(root, "sessions", id)),
     connections: (task) => connections.freeze(task),
     lease: new TaskLease(root),
     store: new JsonTaskStore(join(root, "tasks")),
     sessionRoot: join(root, "sessions"),
-    preferences: new JsonPreferences(root),
+    preferences,
     validateWorkspace: async (path) => {
       if (!path || typeof path !== "string") throw new Error("请先选择工作目录");
       const resolved = await realpath(path);
@@ -86,6 +87,11 @@ export function createTwoCodeService(
             : new ZCodeAdapter(agent, sessions),
   });
   const service: ITwoCodeService = Object.assign(coordinator, {
+    combinations: () => preferences.combinations(),
+    saveCombination: preferences.saveCombination,
+    defaultCombination: preferences.defaultCombination,
+    removeCombination: preferences.removeCombination,
+    onDidCombinationsChange: preferences.onDidCombinationsChange,
     readImage: (path: string) => readStoredImage(root, path),
     importImage: (input: Parameters<ITwoCodeService["importImage"]>[0]) => storeImage(root, input),
     modelSettings: () => connections.read(),
@@ -101,6 +107,7 @@ export function createTwoCodeService(
   service.dispose = async () => {
     await disposeCoordinator();
     connections.dispose();
+    preferences.dispose();
   };
   if (projectTask) {
     const logger = createServiceLogger("two-code-task-index");

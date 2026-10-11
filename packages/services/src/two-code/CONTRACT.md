@@ -52,6 +52,10 @@ Pi/Step及Claude的文本和思考事件可携带blockId，投影按原生内容
 
 configure({ taskId, preferences })在空闲时修改本任务的主副手模型、模式和单/双角色开关；与submit共用执行租约，同脚手架保留sessionId。configurePreferences只修改新任务默认值。旧快照模式默认为build，usage默认为空，不能估算旧token。
 
+combinations/saveCombination/defaultCombination/removeCombination由JsonPreferences在同一个preferences.json内原子维护；revision防止多窗口覆盖，旧默认迁移为首套命名组合。选择复制配置到任务，不建立动态绑定；设默认只影响之后新任务，名称变更不修改任务。组合保存模型/渠道/思考/角色和权限模式，不含凭据。详见named-combinations规格。
+
+组合最多10套，第11套提示先删除。界面以“副手：无”表达单模型，映射dual=false；不显示单/双角色开关及ZCode原生模式入口。关闭副手不销毁已有上下文，单模型组合不能覆盖休眠副手的底座；实际单模型执行不初始化副手、不注入派工工具。
+
 EngineRun携带本轮mode和usage回执入口。Claude的工具前置钩子、Pi的tool_call扩展统一经过任务权限裁决；ZCode通过原生sendText的mode/planEnabled提交。按角色运行编号替换累计回执，避免分块与最终结算重复计费。UI只投影已采集用量，不把主副手contextWindow相加。
 
 任务以two-code:<uuid>接入原生任务索引。Coordinator拥有执行事实，原生索引拥有重命名、置顶、分组、归档等组织元数据；展示投影保留这些元数据。前端复用原生SessionPane入口、ConversationTimeline、ChatPromptEditor、ModelConfigSelect和PermissionDialog，不维护第二份可选任务列表。后台投影在服务释放前收尾，查询期间收到的新事件优先于迟到快照。

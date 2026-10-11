@@ -1,7 +1,6 @@
 import { resolveSelectionSideInheritedModel } from "@/lib/selectionSideInheritedModel.js";
 import { twoCodeTaskId } from "@zcode/services";
 import { TwoCodeSessionPane } from "@/two-code/TwoCodeSessionPane.js";
-import { Button } from "@/components/ui/button.js";
 import { useStartPlanRecommendation } from "@/hooks/useStartPlanRecommendation.js";
 import type { SessionCreateSource } from "@zcode/shared";
 import { reportSessionCreate } from "@/lib/sessionCreateTelemetry.js";
@@ -286,7 +285,6 @@ import {
 } from "@/lib/conversationSelectionReference.js";
 
 export interface SessionPaneProps {
-  twoCodeEntry?: ReactNode;
   paneId: string;
   sessionId: string | null;
   /** 低基数打开入口，由 pane 宿主提供；缺省仅用于兼容旧调用。 */
@@ -490,33 +488,15 @@ function shouldRestoreQueuedComposerFromAck(status: CommandAck["status"]): boole
  * - 模型表单的本地输入 state 下沉到对应子组件，输入时不牵动整个 pane。
  */
 export function SessionPane(props: SessionPaneProps) {
-  const [nativeDraft, setNativeDraft] = useState(false);
   if (
     twoCodeTaskId(props.sessionId) ||
-    (!props.sessionId &&
-      !props.readOnly &&
-      !props.remoteSessionId &&
-      !props.workspaceIdentity &&
-      !nativeDraft)
-  ) {
-    return <TwoCodeSessionPane {...props} onNative={() => setNativeDraft(true)} />;
-  }
-  return (
-    <NativeSessionPane
-      {...props}
-      twoCodeEntry={
-        !props.sessionId && !props.readOnly ? (
-          <Button size="sm" variant="ghost" onClick={() => setNativeDraft(false)}>
-            双角色
-          </Button>
-        ) : undefined
-      }
-    />
-  );
+    (!props.sessionId && !props.readOnly && !props.remoteSessionId && !props.workspaceIdentity)
+  )
+    return <TwoCodeSessionPane {...props} />;
+  return <NativeSessionPane {...props} />;
 }
 
 function NativeSessionPane({
-  twoCodeEntry,
   paneId,
   sessionId,
   openTrigger,
@@ -4396,7 +4376,6 @@ function NativeSessionPane({
   // 若仍创建 composer，会让用户误以为可以直接向 child session 继续输入。
   const composerNode = readOnly ? null : (
     <ConversationComposer
-      extraControls={twoCodeEntry}
       key="conversation-composer"
       // Snapshot 仍服务用量、路由与运行态；工具栏的 mode/model 只读下方 Composer Draft。
       snapshot={snapshot}

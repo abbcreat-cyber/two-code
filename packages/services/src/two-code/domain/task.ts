@@ -14,6 +14,8 @@ export function reconfigureTask(task: TwoCodeTask, preferences: TwoCodePreferenc
   if (task.status === "running") throw new Error("任务仍在执行，请先停止");
   const next = structuredClone(task);
   for (const role of ["lead", "sidekick"] as const) {
+    // “副手无”仅停用派工，不能因单模型组合里缓存的选择替换已有副手上下文。
+    if (role === "sidekick" && !preferences.dual && next.sidekick.sessionId) continue;
     // 原生会话ID只属于原脚手架；换模型保留上下文，不能跨脚手架误用。
     if (next[role].sessionId && next[role].selection.harness !== preferences[role].harness)
       throw new Error("已有上下文的脚手架请在新任务中更换；本任务可直接更换模型");

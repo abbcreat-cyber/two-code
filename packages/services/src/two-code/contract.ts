@@ -1,3 +1,8 @@
+import type {
+  NamedCombination,
+  CombinationsView,
+  CombinationsApi,
+} from "./combinations-contract.js";
 import type { Event } from "@zcode/rpc";
 import type { TwoCodeModelSettingsApi } from "./settings-contract.js";
 import type { TwoCodeImagesApi } from "./image-contract.js";
@@ -123,7 +128,11 @@ export interface CreateTwoCodeTask {
   sidekick: EngineSelection;
 }
 export type TwoCodePreferences = Pick<CreateTwoCodeTask, "dual" | "lead" | "sidekick" | "mode">;
-export interface ITwoCodeService extends TwoCodeModelSettingsApi, TwoCodeImagesApi {
+export type TwoCodeCombination = NamedCombination<TwoCodePreferences>;
+export type TwoCodeCombinations = CombinationsView<TwoCodePreferences>;
+export type TwoCodeCombinationsApi = CombinationsApi<TwoCodePreferences>;
+export interface ITwoCodeService
+  extends TwoCodeModelSettingsApi, TwoCodeImagesApi, TwoCodeCombinationsApi {
   catalog(): Promise<HarnessInfo[]>;
   list(workspacePath: string): Promise<TwoCodeTask[]>;
   create(input: CreateTwoCodeTask): Promise<TwoCodeTask>;
@@ -140,6 +149,7 @@ export interface ITwoCodeService extends TwoCodeModelSettingsApi, TwoCodeImagesA
 }
 export type ITwoCodeExecutionService = Omit<
   ITwoCodeService,
+  | keyof TwoCodeCombinationsApi
   | "modelSettings"
   | "saveConnection"
   | "removeConnection"

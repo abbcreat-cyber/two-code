@@ -25,6 +25,8 @@ export function RoleModelPopover({
   catalog,
   disabled,
   hasSession,
+  none = false,
+  onNone,
   onChange,
   onManage,
 }: {
@@ -33,6 +35,8 @@ export function RoleModelPopover({
   catalog: HarnessInfo[];
   disabled: boolean;
   hasSession?: boolean;
+  none?: boolean;
+  onNone?: () => Promise<void>;
   onChange(selection: EngineSelection): Promise<void>;
   onManage(): void;
 }) {
@@ -48,11 +52,11 @@ export function RoleModelPopover({
     `${m.name} ${m.selection.model} ${m.connection}`.toLowerCase().includes(query.toLowerCase()),
   );
   const compatible = candidates.filter((m) => m.selection.harness === selection.harness);
-  const save = async (next: EngineSelection, close: boolean) => {
+  const apply = async (operation: () => Promise<void>, close: boolean) => {
     setSaving(true);
     setError("");
     try {
-      await onChange(next);
+      await operation();
       if (close) setOpen(false);
     } catch (cause) {
       setError(String(cause));
@@ -60,6 +64,7 @@ export function RoleModelPopover({
       setSaving(false);
     }
   };
+  const save = (next: EngineSelection, close: boolean) => apply(() => onChange(next), close);
   return (
     <Popover
       open={open}
@@ -79,11 +84,15 @@ export function RoleModelPopover({
           data-testid={`two-code-${role}-model`}
           className="group/role-model min-w-0 gap-1 px-2 text-ui-base"
           data-composer-collapse-priority="3"
-          title={`${label} · ${harness?.name ?? selection.harness} · ${selection.provider || "本机连接"} · ${selection.model || "本机模型"} · 思考${thinkingLabels[thinking ?? ""] ?? "未收录"}`}
+          title={
+            none
+              ? "副手 · 无"
+              : `${label} · ${harness?.name ?? selection.harness} · ${selection.provider || "本机连接"} · ${selection.model || "本机模型"} · 思考${thinkingLabels[thinking ?? ""] ?? "未收录"}`
+          }
         >
           <span className="shrink-0 text-foreground-subtle">{label}</span>
           <span className="max-w-40 truncate group-data-[composer-compact=true]/role-model:max-w-24 group-data-[composer-model-icon=true]/toolbar:hidden">
-            {selectedModelName(catalog, selection)}
+            {none ? "无" : selectedModelName(catalog, selection)}
           </span>
           <ChevronDown className="size-3.5 shrink-0" />
         </Button>
@@ -155,12 +164,26 @@ export function RoleModelPopover({
           role="listbox"
           aria-label={`${label}模型列表`}
         >
+          {onNone && (
+            <button
+              type="button"
+              role="option"
+              aria-selected={none}
+              data-testid="two-code-sidekick-none"
+              disabled={disabled || saving}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-menu-hover focus-visible:bg-menu-hover focus-visible:outline-none disabled:opacity-50"
+              onClick={() => void apply(onNone, true)}
+            >
+              <span className="flex-1 text-ui-base">无</span>
+              {none && <Check className="size-4 shrink-0" />}
+            </button>
+          )}
           {compatible.map((m) => (
             <button
               key={`${m.selection.provider}/${m.selection.model}`}
               type="button"
               role="option"
-              aria-selected={m.selected}
+              aria-selected={!none && m.selected}
               data-model-id={m.selection.model}
               data-model-provider={m.selection.provider ?? ""}
               title={`${m.connection} · ${m.selection.model ?? "默认"}`}
@@ -169,7 +192,7 @@ export function RoleModelPopover({
               onClick={() => void save(chooseModel(selection, m.selection), true)}
             >
               <span className="min-w-0 flex-1 break-words text-ui-base">{m.name}</span>
-              {m.selected && <Check className="size-4 shrink-0" />}
+              {!none && m.selected && <Check className="size-4 shrink-0" />}
             </button>
           ))}
           {!compatible.length && (
@@ -180,7 +203,7 @@ export function RoleModelPopover({
           思考档位
           <Select
             value={levels.length ? thinking : ""}
-            disabled={disabled || saving || !levels.length}
+            disabled={disabled || saving || none || !levels.length}
             onValueChange={(level) => void save({ ...selection, thinking: level }, false)}
           >
             <SelectTrigger aria-label={`${label}思考档位`} className="min-w-32" size="lg">

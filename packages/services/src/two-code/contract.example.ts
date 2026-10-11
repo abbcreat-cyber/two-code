@@ -1,5 +1,13 @@
 import type { ITwoCodeService } from "./contract.js";
 import { normalizeThinkingSelection } from "./contract.js";
+export async function saveNamedCombination(service: ITwoCodeService, name: string) {
+  const library = await service.combinations();
+  return service.saveCombination({
+    revision: library.revision,
+    name,
+    preferences: await service.preferences(),
+  });
+}
 export const forkCompletedAnswer = (
   service: ITwoCodeService,
   taskId: string,

@@ -26,6 +26,8 @@ export type {
   HarnessInfo,
   TwoCodeTask,
   TwoCodePreferences,
+  TwoCodeCombination,
+  TwoCodeCombinations,
 } from "./two-code/contract.js";
 export {
   IModelSelectionService,
