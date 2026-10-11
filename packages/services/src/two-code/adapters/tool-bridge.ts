@@ -179,15 +179,15 @@ export default function(pi) {
     return {content:[...(event.content ?? []),{type:'text',text:'协作提醒：实现和验证默认交给唯一副手；仅1–2轮即可完成并确认的微小修改、正确性关键工作和需亲自判断的渲染工作由主手实施。明确用户分工优先；不要为本提醒重做已完成的修改。'}]};
   });
   pi.on('tool_call', async (event) => {
-    if (process.env.TWO_CODE_ACTOR_ROLE === 'sidekick' && forbidden(event.toolName)) return {block:true,reason:'此动作属于主手权限，副手应报告需求而非调用'};
+    if (process.env.TWO_CODE_ACTOR_ROLE === 'sidekick' && forbidden(event.toolName)) return {block:true,reason:'[two-code-permission-denied] 此动作属于主手权限，副手应报告需求而非调用'};
     if (event.toolName === 'read_handoff_history') return;
     if (['sidekick','read_sidekick'].includes(event.toolName)) return;
-    if (['subagent','agent_send','workflow'].includes(event.toolName)) return {block:true,reason:'请使用Two Code管理的持久副手，不允许递归委派'};
+    if (['subagent','agent_send','workflow'].includes(event.toolName)) return {block:true,reason:'[two-code-permission-denied] 请使用Two Code管理的持久副手，不允许递归委派'};
     try {
       const r = await fetch(process.env.TWO_CODE_TOOL_URL, {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN},body:JSON.stringify({name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}})});
       const result = await r.json();
-      if (!r.ok || result.text !== 'allow') return {block:true,reason:r.ok && typeof result.text === 'string' ? result.text : 'Two Code权限通道未确认允许此操作'};
-    } catch { return {block:true,reason:'Two Code权限通道不可用，命令未执行'}; }
+      if (!r.ok || result.text !== 'allow') return {block:true,reason:'[two-code-permission-denied] '+(r.ok && typeof result.text === 'string' ? result.text : 'Two Code权限通道未确认允许此操作')};
+    } catch { return {block:true,reason:'[two-code-permission-denied] Two Code权限通道不可用，命令未执行'}; }
   });
   const call = async (name, args, signal) => {
     const r = await fetch(process.env.TWO_CODE_TOOL_URL, { method:'POST', signal, headers:{'content-type':'application/json', authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN}, body:JSON.stringify({name, arguments:args}) });

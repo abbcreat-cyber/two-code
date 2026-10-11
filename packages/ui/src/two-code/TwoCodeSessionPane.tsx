@@ -222,7 +222,9 @@ export function TwoCodeSessionPane(props: SessionPaneProps & { onNative?: () => 
           data-status={task.status}
         >
           {busy
-            ? "执行中"
+            ? permission
+              ? `待确认 · ${permission.role === "lead" ? "主手" : "副手"}`
+              : "执行中"
             : task.status === "cancelled"
               ? "已停止"
               : task.status === "error"

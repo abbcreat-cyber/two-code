@@ -144,3 +144,55 @@ test("补充原生送达失败后停止旧计划，相同requestId在结算后�
   assert.equal(updates, 1);
   await service.dispose();
 });
+
+test("原生补充排队后撤销旧主手权限，迟到批准无效，新权限仍需确认", async () => {
+  let input: EngineRun;
+  let queued = false;
+  let freshPermission: Promise<boolean>;
+  const service = new TwoCodeCoordinator({
+    sessionRoot: "D:/test-state",
+    catalog: async () => [],
+    validateWorkspace: async (p) => p,
+    store: { load: async () => [], save: async () => {} },
+    createAdapter: () => ({
+      run: async (value) => {
+        input = value;
+        const oldAllowed = await value.permission("powershell", '{"command":"old"}');
+        assert(queued, "撤销旧权限前必须先确认原生新输入已排队");
+        assert.equal(oldAllowed, false);
+        assert.equal(await freshPermission, true);
+        return { text: "新要求完成" };
+      },
+      update: async () => {
+        queued = true;
+        freshPermission = input.permission("powershell", '{"command":"new"}');
+        await new Promise<void>((r) => setImmediate(r));
+      },
+      cancel: async () => {},
+      close: async () => {},
+    }),
+  });
+  const task = await service.create({
+    workspacePath: "D:/fixture",
+    dual: false,
+    lead: { harness: "step-code" },
+    sidekick: { harness: "claude-code" },
+  });
+  await service.submit({ taskId: task.id, requestId: "first", text: "旧要求" });
+  for (let i = 0; i < 50 && !(await service.read(task.id)).permissions.length; i++)
+    await new Promise<void>((r) => setImmediate(r));
+  const old = (await service.read(task.id)).permissions[0]!;
+  await service.submit({ taskId: task.id, requestId: "update", text: "改要求" });
+  const next = await service.read(task.id);
+  assert.equal(next.permissions.length, 1);
+  assert.match(next.permissions[0]!.detail, /new/);
+  await assert.rejects(
+    service.respond({ taskId: task.id, permissionId: old.id, allow: true }),
+    /失效/,
+  );
+  await service.respond({ taskId: task.id, permissionId: next.permissions[0]!.id, allow: true });
+  for (let i = 0; i < 50 && (await service.read(task.id)).status === "running"; i++)
+    await new Promise<void>((r) => setImmediate(r));
+  assert.equal((await service.read(task.id)).status, "completed");
+  await service.dispose();
+});

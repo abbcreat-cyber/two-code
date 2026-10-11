@@ -277,7 +277,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
             : task.dual
               ? leadInstruction
               : "所有面向用户的输出一律中文。核对真实证据后汇报。") +
-            `\n本次真实工作目录：${task.workspacePath}。主副手共享此目录；此目录中的绝对路径与相对路径指向同一工作区，不需为确认目录另执行命令。`,
+            `\n本次真实工作目录（JSON字符串，空格属于路径，不可截断）：${JSON.stringify(task.workspacePath)}。主副手共享此目录；目录内文件优先使用相对路径，不需另行list/find/pwd确认目录。用户明确指定副手执行时先派工，不自行增加目录探测；主手按要求核对产物。`,
         ),
         signal: run.abort.signal,
         emit: async (event) => {

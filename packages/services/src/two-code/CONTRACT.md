@@ -2,7 +2,7 @@
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。
 
-终态在适配器关闭、持久化和租约释放后广播，完成事件可立即接受续问；进入终态提交后的停止只等待提交，不倒改结果。TaskEvent可选toolCallId/notExecuted保存原生开场门禁的未执行回执，旧事件无此字段仍可读取。
+终态在适配器关闭、持久化和租约释放后广播，完成事件可立即接受续问；进入终态提交后的停止只等待提交，不倒改结果。TaskEvent可选toolCallId/notExecuted保存原生开场及权限门禁的明确未执行回执；普通工具失败和中断不代表未执行，旧事件无此字段仍可读取。
 
 Step主手移植阶跃星辰1.0.10的提前开场流：原生同模型、无工具、有界短请求后沿用原档位主请求，一轮最多一次。两角色共享单一定义的沟通规则，副手不增加开场请求。来源、豁免、取消与验收见specs/two-code/opening-communication.md。
 
@@ -13,6 +13,8 @@ handoff、handoff_update和handoff_report由同一任务事件日志保存逐字
 Claude运行中更新采用原生interrupt及流式用户输入，匹配user_message_uuid确认最终报告；Step/Pi采用原生steer。ZCode目前没有运行中更新入口。会话身份可续接，但不承诺任意shell状态或进程跨宿主重启保留；显式启动的后台服务由任务检查并复用。融合来源、适配边界和真实验收见specs/two-code/fusion-integration.md。
 
 UI重开先读快照再消费单调序号变化。Host重启将未完成任务标为可恢复错误，禁止自动重跑。权限等待随取消结束；晚到结果不得覆盖取消。持久化失败必须显式报错。
+
+运行中补充在原生更新确认排队后撤回准入前的主手待批准操作，以拒绝唤醒旧工具；不批准旧操作、不移除之后的新权限或无关副手权限，迟到旧permissionId返回失效。UI按同一任务permissions显示“待确认”与申请角色，刷新不保留已撤回的卡。工作目录按完整JSON字符串提供，空格不构成路径分隔。验收见specs/two-code/experience-refinement.md。
 
 技术端口和验收见specs/two-code/multi-harness.md。
 

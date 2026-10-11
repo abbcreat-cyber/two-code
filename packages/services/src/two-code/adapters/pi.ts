@@ -9,7 +9,8 @@ import { atomicWritePrivateTextFile } from "@zcode/shared/node";
 import { subscriptionEnvironment } from "./chatgpt-subscription.js";
 import { piThinkingLevel } from "../domain/thinking.js";
 import { handleExtensionUi } from "./pi-extension-ui.js";
-import { writeStepOpeningExtension, openingToolEvent } from "./step-opening.js";
+import { writeStepOpeningExtension } from "./step-opening.js";
+import { rejectedToolEvent } from "./tool-outcome.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -318,7 +319,7 @@ export class PiAdapter implements HarnessAdapter {
         const start = tools.get(String(record.toolCallId));
         if (start) usage.toolMs += performance.now() - start;
         tools.delete(String(record.toolCallId));
-        const blocked = openingToolEvent(record);
+        const blocked = rejectedToolEvent(record);
         if (blocked) {
           if (blocked.stopped) openingFailure = blocked.event.text;
           // SDK的start早于tool_call门禁；保存拒绝回执，不能把尝试显示成实际执行。
