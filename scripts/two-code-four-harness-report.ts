@@ -153,7 +153,9 @@ const lines = [
   ...versions.map(
     (v) => `版本 ${v}：${data.results.filter((r: any) => caseVersion(r) === v).length}项。`,
   ),
-  ...(data.transitions ?? []).map((t: any) => `版本分界：${JSON.stringify(t)}。`),
+  ...(data.transitions ?? []).map(
+    (t: any) => `版本分界：完成 ${t.afterCases} 项后，${t.from} → ${t.to}（${t.at}）；${t.reason}。`,
+  ),
   "按用户要求，之前已完成的85项保留、不重跑，修复后仅继续剩余项。跨版本耗时仅供观察，不作为同版本公平排名；表格方括号标明运行版本。",
   `全部完全访问；用户审批请求 ${summary.permissions}，外部修复/续接 ${summary.interventions}，重复通过验证 ${summary.repeatedChecks}。`,
   "",
