@@ -6,6 +6,7 @@ import {
 } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { ensureIndependentPlanSupport } from "./independentPlanSupport.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -3532,6 +3533,26 @@ export function createZCodeAgentService(
         );
         return snapshotWithThoughtLevel;
       }
+    },
+
+    async prepareSessionExecution(params: ZCodeAgentResumeSessionParams) {
+      const client = await getClient(params);
+      await ensureAccountProviderConfigSynced({
+        client,
+        reason: "session_prepare_execution",
+        workspace: params,
+      });
+      // Two Code只需恢复同一执行会话；当前CLI的旧历史消息形状已不同，
+      // 不应让无用的旧消息投影解析阻断MCP恢复，正文统一从V4事实源读取。
+      await client.request(
+        zcodeProtocolMethods.sessionResume,
+        buildSessionResumeParams({
+          ...params,
+          offPeakToolEnabled: isOffPeakToolSupported(params),
+          dynamicWorkflowEnabled: await resolveDynamicWorkflowGate(),
+        }),
+        z.object({ session: z.object({ sessionId: z.literal(params.sessionId) }) }),
+      );
     },
 
     async resumeSession(params: ZCodeAgentResumeSessionParams) {

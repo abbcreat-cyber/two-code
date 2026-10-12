@@ -1,15 +1,15 @@
 param([Parameter(Mandatory=$true)][string]$Root)
 $ErrorActionPreference='Stop'
 $target=[IO.Path]::GetFullPath($Root).TrimEnd('\')
-if($target -notmatch '^D:\\Apps\\TwoCode\\qa\\(embedded-browser|glm-coordination|role-swap|three-harness|step-plan-harness)-\d+$'){throw '不是所属QA目录'}
-$expectedKind=if($target -match '\\step-plan-harness-\d+$'){'two-code-step-plan-harness-qa'}elseif($target -match '\\three-harness-\d+$'){'two-code-three-harness-qa'}elseif($target -match '\\role-swap-\d+$'){'two-code-role-swap-qa'}elseif($target -match '\\glm-coordination-\d+$'){'two-code-glm-coordination-qa'}else{'two-code-embedded-browser-qa'}
+if($target -notmatch '^D:\\Apps\\TwoCode\\qa\\(embedded-browser|glm-coordination|role-swap|three-harness|step-plan-harness|four-harness)-\d+$'){throw '不是所属QA目录'}
+$expectedKind=if($target -match '\\four-harness-\d+$'){'two-code-four-harness-qa'}elseif($target -match '\\step-plan-harness-\d+$'){'two-code-step-plan-harness-qa'}elseif($target -match '\\three-harness-\d+$'){'two-code-three-harness-qa'}elseif($target -match '\\role-swap-\d+$'){'two-code-role-swap-qa'}elseif($target -match '\\glm-coordination-\d+$'){'two-code-glm-coordination-qa'}else{'two-code-embedded-browser-qa'}
 $owner=Get-Content -LiteralPath (Join-Path $target 'owner.json') -Raw|ConvertFrom-Json
 if($owner.kind -ne $expectedKind -or [IO.Path]::GetFullPath($owner.root).TrimEnd('\') -ne $target){throw '所有权不一致'}
 if(-not(Test-Path -LiteralPath (Join-Path $target 'closed.json'))){throw '测试应用未确认关闭'}
 $closed=Get-Content -LiteralPath (Join-Path $target 'closed.json') -Raw|ConvertFrom-Json
 $report=Join-Path 'D:\Apps\TwoCode\reports' ([IO.Path]::GetFileName($target))
 New-Item -ItemType Directory -Path $report -Force|Out-Null
-Get-ChildItem -LiteralPath $target -File|Where-Object {$_.Name -in @('results.json','initial-results.json','continuations.json','comparison.json','comparison.md','native-browser-evidence.json','native-model-evidence.json','artifacts.json','adjudication.json','ui-result.json','desktop-restart.json') -or $_.Extension -eq '.png'}|ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $report}
+Get-ChildItem -LiteralPath $target -File|Where-Object {$_.Name -in @('results.json','initial-results.json','continuations.json','comparison.json','comparison.md','native-browser-evidence.json','native-model-evidence.json','artifacts.json','adjudication.json','ui-result.json','desktop-restart.json','gateway-route-evidence.json','zcode-capabilities.json','native-session-cleanup.json') -or $_.Extension -eq '.png'}|ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $report}
 $tasks=@(Get-ChildItem -LiteralPath (Join-Path $target 'data\tasks') -Filter '*.json'|ForEach-Object {Get-Content -LiteralPath $_.FullName -Raw|ConvertFrom-Json})
 foreach($task in $tasks){
   if($task.status -eq 'running'){throw '测试任务尚未结束'}

@@ -1,0 +1,119 @@
+{
+  "protocolVersion": 1,
+  "sessionId": "native-fixture",
+  "logEpoch": "fixture-epoch",
+  "seq": 0,
+  "revision": 0,
+  "control": {
+    "phase": "completedSuccess",
+    "sessionEnded": true,
+    "canStop": false,
+    "stopState": "idle",
+    "stopTargetKind": "unknown",
+    "activeWorks": [],
+    "lastError": null,
+    "apiRetry": null
+  },
+  "availability": {
+    "fork": {
+      "allowed": true
+    },
+    "compact": {
+      "allowed": true
+    },
+    "switchModelConfig": {
+      "allowed": true
+    },
+    "setFollowupMode": {
+      "allowed": true
+    },
+    "queueEdit": {
+      "allowed": true
+    },
+    "sendQueuedNow": {
+      "allowed": false,
+      "reasonCode": "sendQueuedNowRequiresRunning"
+    },
+    "pauseGoal": {
+      "allowed": false,
+      "reasonCode": "noGoalToPause"
+    },
+    "resumeGoal": {
+      "allowed": false,
+      "reasonCode": "noGoalToResume"
+    }
+  },
+  "inputRouting": {
+    "mode": "startNow"
+  },
+  "meta": {
+    "title": "fixture",
+    "titleSource": "generated"
+  },
+  "config": {
+    "provider": "bigmodel-api",
+    "model": "GLM-5.3",
+    "thought": "max",
+    "thoughtLevels": [
+      "low",
+      "high",
+      "max"
+    ],
+    "followupMode": "queue",
+    "mode": "yolo",
+    "modelSelection": {
+      "providerId": "bigmodel-api",
+      "modelId": "GLM-5.3",
+      "options": {
+        "reasoningLevel": "max"
+      }
+    },
+    "planEnabled": false
+  },
+  "modelTransition": null,
+  "usage": {
+    "contextWindow": {
+      "usedTokens": 31095,
+      "maxTokens": 1000000,
+      "autoCompactThresholdTokens": null,
+      "cache": {
+        "inputTokens": 30700,
+        "cacheReadTokens": 30464,
+        "cacheWriteTokens": 0,
+        "latestHitRate": 0.9923127035830619,
+        "hitRate": 0.8662072609585875,
+        "hitRateRequestCount": 6,
+        "totalInputTokens": 181684,
+        "totalCacheReadTokens": 157376,
+        "totalCacheWriteTokens": 0
+      }
+    },
+    "cumulative": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0
+    }
+  },
+  "queue": {
+    "items": [],
+    "autoDrain": true
+  },
+  "pendingInteractions": [],
+  "pendingCommands": [],
+  "backgroundWorks": [],
+  "subagents": {
+    "revision": 0,
+    "childSessionIds": [],
+    "running": [],
+    "endedTotal": 0
+  },
+  "goal": null,
+  "plan": null,
+  "workspaceHookAdmission": null,
+  "rows": {
+    "window": [],
+    "totalCount": 0,
+    "firstRowId": null
+  }
+}

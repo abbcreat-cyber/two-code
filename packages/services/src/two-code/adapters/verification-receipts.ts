@@ -23,7 +23,9 @@ export function verificationEvent(
 ): EngineEvent | undefined {
   if (!["powershell", "bash", "run_command", "execute_command"].includes(tool.toLowerCase()))
     return;
-  const text = notExecuted ? "" : textOf(result),
+  // Step/WSL实测会把UTF-16警告与UTF-8输出拼接，行首残留NUL会吞掉PASS及退出码；
+  // 仅清理解析视图，并在清理后过滤凭据，原生输出与工具成功/失败事实保持不变。
+  const text = notExecuted ? "" : textOf(result).replaceAll("\u0000", ""),
     // Claude失败头和Step尾行格式不同；实测Step的Command exited with code被漏掉，
     // 只匹配独立的原生状态行，不能要求模型追加打印EXITCODE来补证。
     match =

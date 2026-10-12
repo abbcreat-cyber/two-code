@@ -8,6 +8,26 @@ import {
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { EngineEvent } from "../app/ports.js";
 
+test("WSL混合编码的NUL不吞掉真实验证摘要，也不绕过凭据过滤", () => {
+  const raw =
+    "w\u0000s\u0000l\u0000: warning\r\u0000\n\u0000PASS: all coding checks\nPASS tok\u0000en=private\n";
+  const receipt = JSON.parse(verificationEvent("run_command", "nul", raw, false)!.text);
+  assert.deepEqual(receipt.summaries, ["PASS: all coding checks"]);
+  assert.equal(receipt.status, "completed");
+  assert(!("reportedExitCode" in receipt));
+  assert(!JSON.stringify(receipt).includes("private"));
+  const failed = JSON.parse(
+    verificationEvent(
+      "run_command",
+      "nul-failed",
+      "\u0000FAIL: fixture\n\u0000Command exited with code 7\n",
+      true,
+    )!.text,
+  );
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.reportedExitCode, 7);
+});
+
 test("原生无冒号Exit code回执保留退出码，不靠模型额外打印EXITCODE", () => {
   for (const text of [
     "Exit code 7\nFAIL: fixture",

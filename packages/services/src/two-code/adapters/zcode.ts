@@ -1,6 +1,6 @@
+import { openZCodeStream } from "./zcode-stream.js";
 import { randomUUID } from "node:crypto";
 import type { IZCodeAgentService, IZCodeSessionService } from "../../index.js";
-import type { ZCodeAgentServiceEvent } from "../../index.js";
 import type { CommandEnvelope } from "@zcode/shared/zcode-protocol-v4";
 import type { EngineRun, EngineReport, HarnessAdapter } from "../app/ports.js";
 import { ToolBridge } from "./tool-bridge.js";
@@ -10,14 +10,14 @@ export class ZCodeAdapter implements HarnessAdapter {
   private bridge?: ToolBridge;
   constructor(
     private readonly agent: IZCodeAgentService,
-    private readonly sessions: IZCodeSessionService,
+    _sessions: IZCodeSessionService,
   ) {}
-  private async command(type: CommandEnvelope["type"], payload: unknown) {
+  private async command(type: CommandEnvelope["type"], payload: unknown, commandId = randomUUID()) {
     if (!this.session) throw new Error("ZCode 会话尚未建立");
     const ack = await this.agent.sendConversationCommandV4({
       workspacePath: this.session.workspacePath,
       envelope: {
-        commandId: randomUUID(),
+        commandId,
         clientId: "two-code",
         sessionId: this.session.sessionId,
         type,
@@ -34,7 +34,7 @@ export class ZCodeAdapter implements HarnessAdapter {
     const initialized = await this.agent.initialize({ workspacePath: input.cwd });
     if (!initialized.available)
       throw new Error(initialized.reason ?? "原生 ZCode 尚未配置可用模型");
-    if (input.handoff || input.readHandoffHistory) {
+    if (!this.bridge && (input.handoff || input.readHandoffHistory)) {
       this.bridge = new ToolBridge(input);
       await this.bridge.start();
     }
@@ -69,7 +69,12 @@ export class ZCodeAdapter implements HarnessAdapter {
         : undefined;
     let sessionId = input.sessionId;
     if (sessionId) {
-      await this.sessions.resumeSession({ workspacePath: input.cwd, sessionId, model, mcpServers });
+      await this.agent.prepareSessionExecution({
+        workspacePath: input.cwd,
+        sessionId,
+        model,
+        mcpServers,
+      });
     } else {
       // 与原生桌面一致使用V4创建，避免legacy立即持久化会话绕过V4草稿提升链。
       const created = await this.agent.sendConversationCommandV4({
@@ -94,98 +99,31 @@ export class ZCodeAdapter implements HarnessAdapter {
     this.session = { workspacePath: input.cwd, sessionId };
     const beforeUsage = await this.agent.getTaskTokenUsage(this.session);
     await input.emit({ kind: "session", text: sessionId });
-    let inputId: string | undefined;
-    const buffered: ZCodeAgentServiceEvent[] = [];
-    const reasoningParts = new Set<string>();
-    let resolveRun!: (text: string) => void, rejectRun!: (error: Error) => void;
-    const done = new Promise<string>((resolve, reject) => {
-      resolveRun = resolve;
-      rejectRun = reject;
-    });
-    void done.catch(() => undefined);
-    const handle = (item: ZCodeAgentServiceEvent) => {
-      if (!inputId) {
-        buffered.push(item);
-        return;
-      }
-      if (item.type === "permission.request") {
-        void input
-          .permission(item.request.toolName, JSON.stringify(item.request.input, null, 2))
-          .then((allow) =>
-            this.command("resolveInteraction", {
-              interactionId: item.request.requestId,
-              answer: { action: allow ? "accept" : "decline" },
-            }),
-          )
-          .catch(rejectRun);
-        return;
-      }
-      if (item.type !== "session.event") return;
-      const event = item.event;
-      const payload =
-        event.payload && typeof event.payload === "object"
-          ? (event.payload as Record<string, unknown>)
-          : undefined;
-      // 原生桌面链路使用model.streaming；part.delta只属于另一种消息投影。
-      if (event.type === "model.streaming" && payload) {
-        if (payload.kind === "reasoning_delta" || payload.kind === "reasoning_end")
-          void input
-            .emit({
-              kind: "reasoning",
-              text: payload.kind === "reasoning_end" ? "" : String(payload.delta ?? ""),
-            })
-            .catch(rejectRun);
-        else if (payload.kind === "text_delta" || payload.kind === "text")
-          void input.emit({ kind: "message", text: String(payload.delta ?? "") }).catch(rejectRun);
-      }
-      if (event.type === "part.started" || event.type === "part.upserted") {
-        const part = payload?.part as { id?: string; type?: string } | undefined;
-        if (part?.type === "reasoning" && part.id) reasoningParts.add(part.id);
-      }
-      if (event.type === "part.delta" && payload) {
-        const reasoning =
-          payload.field === "reasoning" || reasoningParts.has(String(payload.partId));
-        if (reasoning || payload.field === "text")
-          void input
-            .emit({ kind: reasoning ? "reasoning" : "message", text: String(payload.delta ?? "") })
-            .catch(rejectRun);
-      }
-      if (event.type === "tool.updated" && payload?.kind === "scheduled")
-        void input
-          .emit({ kind: "tool", text: String(payload.toolName ?? "工具") })
-          .catch(rejectRun);
-      if (payload?.inputId !== inputId) return;
-      if (event.type === "turn.completed") {
-        if (payload?.resultType && payload.resultType !== "success")
-          rejectRun(new Error(`ZCode ${payload.resultType}`));
-        else resolveRun(String(payload?.response ?? ""));
-      } else if (event.type === "turn.failed")
-        rejectRun(new Error(JSON.stringify(payload?.error ?? "原生执行失败")));
-    };
-    const subscription = this.agent.onDynamicSessionEvent({
-      ...this.session,
-      deliveryKind: "desktop-continuous",
-      includeSnapshot: false,
-    })(handle);
-    const abort = () => {
-      void this.cancel();
-      rejectRun(new Error("ZCode 任务已停止"));
-    };
-    input.signal.addEventListener("abort", abort, { once: true });
+    const commandId = randomUUID();
+    const stream = await openZCodeStream(
+      this.agent,
+      this.session,
+      input,
+      commandId,
+      (payload) => this.command("resolveInteraction", payload),
+      () => this.cancel(),
+    );
     try {
       input.signal.throwIfAborted();
-      const ack = await this.command("sendText", {
-        text: `${input.systemPrompt}\n\n本次任务：\n${input.prompt}`,
-        // 与原生输入框相同，随本轮Submission冻结配置；独立切换命令需要CAS版本。
-        mode: input.mode === "plan" ? "build" : (input.mode ?? "build"),
-        planEnabled: input.mode === "plan",
-        ...(model ? { modelSelection: model } : {}),
-        toolDisallowlist: ["Agent", "Task"],
-      });
+      const ack = await this.command(
+        "sendText",
+        {
+          text: `${input.systemPrompt}\n\n本次任务：\n${input.prompt}`,
+          // 与原生输入框相同，随本轮Submission冻结配置；独立切换命令需要CAS版本。
+          mode: input.mode === "plan" ? "build" : (input.mode ?? "build"),
+          planEnabled: input.mode === "plan",
+          ...(model ? { modelSelection: model } : {}),
+          toolDisallowlist: ["Agent", "Task"],
+        },
+        commandId,
+      );
       if (ack.result?.type !== "inputAccepted") throw new Error("ZCode 未返回可关联的输入确认");
-      inputId = ack.result.inputId;
-      for (const item of buffered) handle(item);
-      const text = await done;
+      const text = await stream.done;
       input.signal.throwIfAborted();
       const afterUsage = await this.agent.getTaskTokenUsage(this.session);
       const delta = (
@@ -211,9 +149,11 @@ export class ZCodeAdapter implements HarnessAdapter {
         ttftMs: null,
       });
       return { text, sessionId };
+    } catch (error) {
+      await this.cancel();
+      throw error;
     } finally {
-      subscription.dispose();
-      input.signal.removeEventListener("abort", abort);
+      await stream.close();
     }
   }
   async cancel(): Promise<void> {

@@ -41,7 +41,8 @@ export class NativeToolRows {
           createdAtSeq: event.seq,
           kind: "toolCall",
           toolCallId: `two-code:native:${key}`,
-          toolName: draft.tool,
+          // ZCode 原生 MCP 名称带自有前缀；统一显示名才能与已接受的交接草稿合并。
+          toolName: draft.tool.replace(/^mcp__two_code__/i, ""),
           status: this.denied.has(key) ? "cancelled" : "inputStreaming",
           inputText: "",
           ...(this.denied.has(key) ? { output: { text: "未执行：本次操作未获批准" } } : {}),

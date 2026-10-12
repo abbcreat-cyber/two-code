@@ -585,6 +585,8 @@ export interface IZCodeAgentService {
   ): Promise<ZCodeAgentWorkspaceRuntimeIdentity>;
   createSession(params: ZCodeAgentCreateSessionParams): Promise<ZCodeSessionStateSnapshot>;
   resumeSession(params: ZCodeAgentResumeSessionParams): Promise<ZCodeSessionStateSnapshot>;
+  /** 恢复执行能力/MCP并校验会话身份；输出由V4订阅提供，不读取旧历史消息结构。 */
+  prepareSessionExecution(params: ZCodeAgentResumeSessionParams): Promise<void>;
   listSessions(params: ZCodeAgentListSessionsParams): Promise<ZCodeSessionInfo[]>;
   listSessionSubagents(
     params: ZCodeAgentListSessionSubagentsParams,
