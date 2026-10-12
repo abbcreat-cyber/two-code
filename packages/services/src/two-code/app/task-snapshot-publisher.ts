@@ -7,20 +7,21 @@ export class TaskSnapshotPublisher {
   constructor(
     private readonly deliver: (snapshot: TwoCodeTask) => void,
     private readonly intervalMs = 100,
+    private readonly freeze: (task: TwoCodeTask) => TwoCodeTask = structuredClone,
   ) {}
 
   publish(task: TwoCodeTask, streaming = false): void {
     if (!streaming) {
       this.clear(task.id);
       this.lastStreamAt.delete(task.id);
-      this.deliver(structuredClone(task));
+      this.deliver(this.freeze(task));
       return;
     }
     const elapsed = Date.now() - (this.lastStreamAt.get(task.id) ?? -Infinity);
     if (elapsed >= this.intervalMs) {
       this.clear(task.id);
       this.lastStreamAt.set(task.id, Date.now());
-      this.deliver(structuredClone(task));
+      this.deliver(this.freeze(task));
       return;
     }
     const pending = this.pending.get(task.id);
@@ -34,7 +35,7 @@ export class TaskSnapshotPublisher {
       this.pending.delete(task.id);
       if (!latest) return;
       this.lastStreamAt.set(task.id, Date.now());
-      this.deliver(structuredClone(latest.task));
+      this.deliver(this.freeze(latest.task));
     }, this.intervalMs - elapsed);
     this.pending.set(task.id, { task, timer });
   }

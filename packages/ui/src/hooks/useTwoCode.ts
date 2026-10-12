@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { HarnessInfo, TwoCodePreferences, TwoCodeTask } from "@zcode/services";
+import type {
+  HarnessInfo,
+  TwoCodePreferences,
+  TwoCodeTask,
+  TwoCodeViewFrame,
+  TwoCodeViewSnapshot,
+} from "@zcode/services";
+import type { ConversationRow } from "@zcode/shared/zcode-protocol-v4";
+import { applyTwoCodeView } from "@/two-code/conversationView.js";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useModelSelectionView } from "@/hooks/useModelSelectionView.js";
 import {
@@ -13,6 +21,7 @@ const initial: TwoCodePreferences = {
   lead: { harness: "claude-code" },
   sidekick: { harness: "pi" },
 };
+const emptyRows: ConversationRow[] = [];
 export function useTwoCode(
   workspacePath: string,
   activeId: string | null,
@@ -31,6 +40,8 @@ export function useTwoCode(
   const [catalog, setCatalog] = useState<HarnessInfo[]>([]);
   const [preferences, setPreferences] = useState<TwoCodePreferences>(initial);
   const [tasks, setTasks] = useState<TwoCodeTask[]>([]);
+  const [rowsByTask, setRowsByTask] = useState(new Map<string, ConversationRow[]>());
+  const refreshView = useRef<(id: string) => Promise<void>>(async () => {});
   const [loading, setLoading] = useState(true);
   const [configuring, setConfiguring] = useState(false);
   const [defaultsLoading, setDefaultsLoading] = useState(false);
@@ -49,34 +60,82 @@ export function useTwoCode(
   const forkingRef = useRef(false);
   const pendingFork = useRef<{ taskId: string; atSeq: number; requestId: string } | null>(null);
   const pendingRequest = useRef<{ taskId: string; text: string; requestId: string } | null>(null);
-  const upsert = useCallback(
-    (task: TwoCodeTask) =>
-      setTasks((items) => [task, ...items.filter((item) => item.id !== task.id)]),
-    [],
-  );
+  const upsert = useCallback((task: TwoCodeTask) => {
+    void refreshView.current(task.id);
+  }, []);
   useEffect(() => {
     let disposed = false;
-    const live = new Map<string, TwoCodeTask>();
+    const views = new Map<string, TwoCodeViewSnapshot>();
+    const pending = new Map<string, Promise<void>>();
+    const wanted = new Map<string, { epoch: string; revision: number }>();
     setLoading(true);
     setTasks([]);
+    setRowsByTask(new Map());
     setError(null);
     if (!service) {
       setError("当前宿主未启用 Two Code 服务");
       setLoading(false);
       return;
     }
-    const subscription = service.onDidChange((task) => {
+    const receive = (frame: TwoCodeViewFrame, authoritative = false) => {
       if (disposed) return;
+      const id = frame.kind === "snapshot" ? frame.task.id : frame.taskId;
+      const path = frame.kind === "snapshot" ? frame.task.workspacePath : frame.workspacePath;
       if (
-        task.workspacePath.replaceAll("\\", "/").toLowerCase() !==
+        path.replaceAll("\\", "/").toLowerCase() !==
         workspacePath.replaceAll("\\", "/").toLowerCase()
       )
         return;
-      live.set(task.id, task);
-      setTasks((items) => {
-        return [task, ...items.filter((item) => item.id !== task.id)];
-      });
-    });
+      const previous = views.get(id);
+      const next = applyTwoCodeView(previous, frame, authoritative);
+      if (!next) {
+        const epoch = frame.kind === "snapshot" ? frame.snapshot.logEpoch : frame.epoch;
+        const revision = frame.kind === "snapshot" ? frame.snapshot.revision : frame.revision;
+        const last = wanted.get(id);
+        if (!last || last.epoch !== epoch || last.revision < revision)
+          wanted.set(id, { epoch, revision });
+        void refresh(id);
+        return;
+      }
+      const target = wanted.get(id);
+      if (
+        authoritative &&
+        target &&
+        (next.snapshot.logEpoch !== target.epoch || next.snapshot.revision >= target.revision)
+      )
+        wanted.delete(id);
+      if (next === previous) return;
+      views.set(id, next);
+      setRowsByTask((old) => new Map(old).set(id, next.snapshot.rows.window));
+      if (next.task !== previous?.task)
+        setTasks((items) => [next.task, ...items.filter((item) => item.id !== id)]);
+    };
+    const refresh = (id: string, attempt = 0): Promise<void> => {
+      const existing = pending.get(id);
+      if (existing) return existing;
+      const work = service
+        .readView(id)
+        .then((frame) => receive(frame, true))
+        .catch((cause) => {
+          wanted.delete(id);
+          if (!disposed) setError(String(cause));
+        })
+        .finally(() => {
+          pending.delete(id);
+          // 补快照在途时也可能丢掉最后一帧，不能等下一 token 才发现终态没追上。
+          if (!disposed && wanted.has(id)) {
+            if (attempt < 2) void refresh(id, attempt + 1);
+            else {
+              wanted.delete(id);
+              setError("会话视图同步未追上，请重新打开任务");
+            }
+          }
+        });
+      pending.set(id, work);
+      return work;
+    };
+    refreshView.current = refresh;
+    const subscription = service.onDidViewChange((frame) => receive(frame));
     const catalogSubscription = service.onDidCatalogChange(() => {
       void service
         .catalog()
@@ -87,15 +146,13 @@ export function useTwoCode(
           if (!disposed) setError(String(cause));
         });
     });
-    void Promise.all([service.catalog(), service.preferences(), service.list(workspacePath)])
+    void Promise.all([service.catalog(), service.preferences(), service.listViews(workspacePath)])
       .then(([engines, defaults, saved]) => {
         if (!disposed) {
           setCatalog(engines);
           setPreferences(readDraftPreferences(localStorage, draftPreferenceKey, defaults));
-          // 初始查询在途时仍会收到流式/权限事件；迟到快照不能覆盖已看到的新状态。
-          setTasks([
-            ...new Map([...saved.map((task) => [task.id, task] as const), ...live]).values(),
-          ]);
+          // 原版 snapshot/revision 语义：初始回包也经过同一水位检查。
+          for (const frame of saved) receive(frame);
         }
       })
       .catch((cause) => {
@@ -106,6 +163,7 @@ export function useTwoCode(
       });
     return () => {
       disposed = true;
+      refreshView.current = async () => {};
       subscription.dispose();
       catalogSubscription.dispose();
     };
@@ -202,6 +260,7 @@ export function useTwoCode(
     setPreferences,
     tasks,
     task: tasks.find((task) => task.id === activeId),
+    rows: rowsByTask.get(activeId ?? "") ?? emptyRows,
     activeId,
     loading,
     configuring: configuring || defaultsLoading,

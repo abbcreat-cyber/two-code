@@ -1,0 +1,156 @@
+{
+  "kind": "snapshot",
+  "task": {
+    "mode": "build",
+    "usage": [],
+    "id": "00000000-0000-4000-8000-000000000001",
+    "workspacePath": "D:/fixture",
+    "title": "新任务",
+    "dual": true,
+    "status": "running",
+    "lead": {
+      "selection": {
+        "harness": "claude-code"
+      },
+      "status": "running"
+    },
+    "sidekick": {
+      "selection": {
+        "harness": "pi"
+      },
+      "status": "idle"
+    },
+    "events": [
+      {
+        "role": "user",
+        "kind": "message",
+        "text": "fixture",
+        "seq": 1,
+        "at": "2026-10-12T00:00:00Z"
+      }
+    ],
+    "permissions": [],
+    "requestIds": [],
+    "updatedAt": "2026-10-12T00:00:00Z"
+  },
+  "snapshot": {
+    "protocolVersion": 1,
+    "sessionId": "two-code:00000000-0000-4000-8000-000000000001",
+    "logEpoch": "bc9cd4ee-9324-4730-9507-63ce37207e7f",
+    "seq": 1,
+    "revision": 1,
+    "control": {
+      "phase": "running",
+      "sessionEnded": false,
+      "canStop": true,
+      "stopState": "stoppable",
+      "stopTargetKind": "assistant",
+      "activeWorks": [],
+      "lastError": null,
+      "apiRetry": null
+    },
+    "availability": {
+      "fork": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "compact": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "switchModelConfig": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "setFollowupMode": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "queueEdit": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "sendQueuedNow": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "pauseGoal": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      },
+      "resumeGoal": {
+        "allowed": false,
+        "reasonCode": "two-code.command-not-routed"
+      }
+    },
+    "inputRouting": {
+      "mode": "guide"
+    },
+    "meta": {
+      "title": "新任务",
+      "titleSource": "custom"
+    },
+    "config": {
+      "provider": "claude-code",
+      "model": "",
+      "thought": "",
+      "thoughtLevels": [],
+      "followupMode": "guide",
+      "mode": "build"
+    },
+    "usage": {
+      "contextWindow": null,
+      "cumulative": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    },
+    "modelTransition": null,
+    "queue": {
+      "items": [],
+      "autoDrain": false
+    },
+    "pendingInteractions": [],
+    "pendingCommands": [],
+    "backgroundWorks": [],
+    "goal": null,
+    "plan": null,
+    "workspaceHookAdmission": null,
+    "rows": {
+      "window": [
+        {
+          "rowId": 10,
+          "turnId": "two-code:00000000-0000-4000-8000-000000000001:turn:1",
+          "createdAt": 1791763200000,
+          "createdAtSeq": 1,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "state": "running",
+          "startedAt": 1791763200000
+        },
+        {
+          "rowId": 11,
+          "turnId": "two-code:00000000-0000-4000-8000-000000000001:turn:1",
+          "createdAt": 1791763200000,
+          "createdAtSeq": 1,
+          "kind": "userInput",
+          "origin": "realUser",
+          "text": "fixture"
+        },
+        {
+          "rowId": 20,
+          "turnId": "two-code:00000000-0000-4000-8000-000000000001:turn:1",
+          "createdAt": 1791763200000,
+          "createdAtSeq": 2,
+          "kind": "reasoning",
+          "state": "streaming",
+          "text": "**主手**\n\nstart"
+        }
+      ],
+      "totalCount": 3,
+      "firstRowId": 10
+    }
+  }
+}

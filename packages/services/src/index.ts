@@ -6,7 +6,12 @@ export {
   twoCodeSessionId,
   twoCodeTaskId,
   twoCodeForkPoints,
+  projectTwoCodeRows,
+  NativeToolRows,
+  imageMessage,
+  projectImageMessage,
 } from "./two-code/contract.js";
+export type { TwoCodeViewFrame, TwoCodeViewSnapshot } from "./two-code/contract.js";
 export {
   modelThinkingProfiles,
   selectionThinkingProfile,

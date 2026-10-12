@@ -122,7 +122,9 @@ export function createTwoCodeService(
     const logger = createServiceLogger("two-code-task-index");
     const signatures = new Map<string, string>();
     let tail = Promise.resolve();
-    service.onDidChange((task) => {
+    service.onDidViewChange((frame) => {
+      const task = frame.task;
+      if (!task) return;
       // 流式正文由聊天订阅消费；索引仅在组织/执行状态变化时更新，避免每token重拉侧栏。
       const signature = JSON.stringify([
         task.title,

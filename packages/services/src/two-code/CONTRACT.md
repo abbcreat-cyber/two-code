@@ -1,5 +1,7 @@
 # Two Code
 
+前端与任务索引使用 onDidViewChange / readView / listViews，传递标准 ConversationSnapshot、row.delta 与 row.upserted。视图 task.events 只承载用户输入、工具计数与控制状态；完整原始历史继续由 read/list 和存储提供。Renderer 使用原版 applyConversationDeltas，断档重取快照，不能续发命令。旧 onDidChange 保持兼容，只有旧消费者订阅时才生成全量副本；详见 native-stream-adaptation。
+
 流式事件仍逐条保留。onDidChange 对连续正文/思考/参数快照合并至每任务最多 10Hz，首段即时；状态、权限、工具边界、错误、终态立即冲刷并清除旧待发通知。执行状态不由计时器驱动，释放清除待发快照。详见 stream-performance-and-receipts 规格。
 
 唯一所有者是 TwoCodeCoordinator。它接收UI命令，管理角色归属、请求幂等、权限、事件和持久状态。原生框架保管模型上下文，Adapter必须以原生结算而非ACK确认完成。

@@ -12,7 +12,6 @@ import { PermissionDialog } from "@/PermissionDialog.js";
 import { useZCodeStoreWithDefault } from "@/store/StoreProvider.js";
 import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
 import type { SessionPaneProps } from "@/v4/SessionPane.js";
-import { projectTwoCodeRows } from "./conversationProjection.js";
 import { TwoCodeModelControls } from "./TwoCodeModelControls.js";
 import { TwoCodeUsageBar } from "./TwoCodeUsageBar.js";
 import { useSettings } from "@/hooks/useSettingService.js";
@@ -52,7 +51,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps) {
     (s) => s.codePreviewSettings,
     DEFAULT_CODE_PREVIEW_SETTINGS,
   );
-  const rows = useMemo(() => projectTwoCodeRows(task), [task]);
+  const rows = state.rows;
   const promptHistory = useMemo(() => twoCodePromptHistory(state.tasks), [state.tasks]);
   const updateText = useCallback(
     (value: string) => {

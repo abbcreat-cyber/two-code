@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import { _electron as electron } from "playwright-core";
 import { configure } from "./two-code-glm-code-fixture.mjs";
 const root = `D:/Apps/TwoCode/qa/freeze-live-${Date.now()}`;
@@ -31,7 +30,7 @@ const env = {
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({
-  executablePath: "D:/Apps/TwoCode/releases/0.8.33-r2/win-unpacked/Two Code.exe",
+  executablePath: process.env.TWO_CODE_QA_EXE || "D:/Apps/TwoCode/releases/0.8.33-r2/win-unpacked/Two Code.exe",
   args: [],
   env,
   timeout: 60000,
@@ -40,6 +39,7 @@ const samples = [];
 let outcome = "unknown";
 let task;
 let gpuStatus;
+let runtimeVersion;
 const bounded = (promise, ms) => {
   let timer;
   return Promise.race([
@@ -58,6 +58,7 @@ try {
     w.showInactive();
   });
   gpuStatus = await app.evaluate(({ app }) => app.getGPUFeatureStatus());
+  runtimeVersion = await app.evaluate(({ app }) => app.getVersion());
   const cdp = await page.context().newCDPSession(page);
   console.log(JSON.stringify({ stage: "gpu", gpuStatus }));
   await page
@@ -77,6 +78,15 @@ try {
     }),
   );
   const start = Date.now();
+  await page.evaluate(() => {
+    window.__qaPerf = { longTasks: 0, longTaskMs: 0, maxFrameMs: 0 };
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) { window.__qaPerf.longTasks++; window.__qaPerf.longTaskMs += entry.duration; }
+    }).observe({ entryTypes: ["longtask"] });
+    let previous = performance.now();
+    const frame = (now) => { window.__qaPerf.maxFrameMs = Math.max(window.__qaPerf.maxFrameMs, now - previous); previous = now; requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
+  });
   let baselineMB = 0;
   while (Date.now() - start < 120000) {
     await new Promise((r) => setTimeout(r, 2000));
@@ -96,6 +106,7 @@ try {
         nodes: document.querySelectorAll("*").length,
         reasoningText:
           document.querySelector("[data-reasoning-streaming-text]")?.textContent?.length || 0,
+        ...window.__qaPerf,
       })),
       3000,
     );
@@ -104,7 +115,16 @@ try {
     const renderer = metrics.filter((m) => m.type === "Tab");
     const mb = renderer.reduce((a, b) => a + b.mb, 0);
     baselineMB ||= mb;
+    let inputMs;
+    if (samples.length === 15 || samples.length === 40) {
+      const inputAt = Date.now();
+      await page.getByTestId("two-code-composer").fill("性能验收草稿（不会发送）");
+      await bounded(page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))), 3000);
+      inputMs = Date.now() - inputAt;
+      await page.getByTestId("two-code-composer").fill("");
+    }
     const sample = {
+      inputMs,
       seconds: Math.round((Date.now() - start) / 1000),
       responseMs,
       heapMB: Math.round(heap.usedSize / 1048576),
@@ -152,7 +172,7 @@ try {
 } finally {
   await fs.writeFile(
     `${report}/samples.json`,
-    JSON.stringify({ version: "0.8.33", gpuStatus, outcome, samples }, null, 2),
+    JSON.stringify({ version: runtimeVersion, gpuStatus, outcome, samples }, null, 2),
   );
   try {
     await app.close();
