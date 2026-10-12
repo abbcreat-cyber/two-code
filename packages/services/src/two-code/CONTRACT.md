@@ -63,3 +63,7 @@ combinations/saveCombination/defaultCombination/removeCombination由JsonPreferen
 EngineRun携带本轮mode和usage回执入口。Claude的工具前置钩子、Pi的tool_call扩展统一经过任务权限裁决；ZCode通过原生sendText的mode/planEnabled提交。按角色运行编号替换累计回执，避免分块与最终结算重复计费。UI只投影已采集用量，不把主副手contextWindow相加。
 
 任务以two-code:<uuid>接入原生任务索引。Coordinator拥有执行事实，原生索引拥有重命名、置顶、分组、归档等组织元数据；展示投影保留这些元数据。前端复用原生SessionPane入口、ConversationTimeline、ChatPromptEditor、ModelConfigSelect和PermissionDialog，不维护第二份可选任务列表。后台投影在服务释放前收尾，查询期间收到的新事件优先于迟到快照。
+## 本地工具传输
+
+Pi/Step到自有ToolBridge的阻塞交接使用可取消的Node HTTP请求，不应用模型调用之外的隐式响应头短超时，不自动重试派工。Coordinator仍是交接与取消状态的唯一所有者，连接失败不得伪造副手报告。
+

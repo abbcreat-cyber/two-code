@@ -6,6 +6,7 @@ import { permissionDenied } from "./permission-feedback.js";
 import { viewImage, visionDescription } from "./vision.js";
 import { inspectTextFile, textFactsDescription } from "./text-file-facts.js";
 import { browserDescription, runBrowserTool } from "./browser.js";
+import { requestBridge } from "./bridge-request.js";
 
 const definitions = [
   {
@@ -204,6 +205,7 @@ export const piToolExtension = `
 import { Type } from '@earendil-works/pi-ai';
 export default function(pi) {
   const forbidden = ${sidekickForbiddenTool.toString()};
+  const requestBridge = ${requestBridge.toString()};
   let editReminder = false, workspaceReminder = false;
   pi.registerCommand('two-code-tool-bridge', {description:'Two Code permission and sidekick bridge v1',handler:async()=>{}});
   const nativePowerShell = () => {
@@ -233,14 +235,14 @@ export default function(pi) {
     if (['sidekick','read_sidekick'].includes(event.toolName)) return;
     if (['subagent','agent_send','workflow'].includes(event.toolName)) return {block:true,reason:'[two-code-permission-denied] 请使用Two Code管理的持久副手，不允许递归委派'};
     try {
-      const r = await fetch(process.env.TWO_CODE_TOOL_URL, {method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN},body:JSON.stringify({name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}})});
-      const result = await r.json();
+      const r = await requestBridge(process.env.TWO_CODE_TOOL_URL, process.env.TWO_CODE_TOOL_TOKEN, {name:'permission',arguments:{tool:event.toolName,detail:JSON.stringify(event.input)}});
+      const result = r.result;
       if (!r.ok || result.text !== 'allow') return {block:true,reason:'[two-code-permission-denied] '+(r.ok && typeof result.text === 'string' ? result.text : 'Two Code权限通道未确认允许此操作')};
     } catch { return {block:true,reason:'[two-code-permission-denied] Two Code权限通道不可用，命令未执行'}; }
   });
   const call = async (name, args, signal) => {
-    const r = await fetch(process.env.TWO_CODE_TOOL_URL, { method:'POST', signal, headers:{'content-type':'application/json', authorization:'Bearer '+process.env.TWO_CODE_TOOL_TOKEN}, body:JSON.stringify({name, arguments:args}) });
-    const result = await r.json(); if(!r.ok) throw Error(result.error || '派工失败');
+    const r = await requestBridge(process.env.TWO_CODE_TOOL_URL, process.env.TWO_CODE_TOOL_TOKEN, {name, arguments:args}, signal);
+    const result = r.result; if(!r.ok) throw Error(result.error || '派工失败');
     return { content:result.content ?? [{type:'text',text:result.text}], details:{}, ...(result.isError?{isError:true}:{}) };
   };
   pi.registerTool({name:'check_text_encoding',label:'检查文本格式',description:${JSON.stringify(textFactsDescription)},parameters:Type.Object({path:Type.String()}),execute:(id,args,signal)=>call('check_text_encoding',args,signal)});
