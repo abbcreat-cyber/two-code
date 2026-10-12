@@ -78,6 +78,8 @@ export function sidekickForbiddenTool(tool: string): boolean {
 
 export const handoffToolDescription =
   "向唯一持久副手派明确任务，默认block:true等待报告。有独立主手工作时才用false，之后read_sidekick等待，禁止轮询。精确接口、代码、最窄验证、冻结输入及运行时状态写进brief；高风险查询/指标/评测规则/阈值由主手定稿，副手机械执行。副手不负责用户消息、PR或提交。运行中再次调用用于同一副手的更新，不创建第二个副手；未确认送达必须如实处理。";
+export const readSidekickToolDescription =
+  "等待并读取本轮副手的真实报告；本轮未派工时只返回状态说明及历史入口，不代表产生了新报告或新执行。";
 // 原生中断消息只证明停止请求，不能推导工具从未开始或已有副作用已撤销。
 export const interruptionEvidenceNote =
   "中断证据边界：原生interrupt/取消回执不代表工具从未启动、未执行或已回滚。此前工具可能已产生文件或其他影响；即使回执写interrupted，也不能据此声称从未执行。没有原始证据时只报告已中断，先前执行情况/输出/退出码/耗时未确认；不猜测，也不为补证擅自增加工具或命令。";

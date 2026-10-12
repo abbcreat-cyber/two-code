@@ -8,6 +8,22 @@ import {
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { EngineEvent } from "../app/ports.js";
 
+test("长路径失败摘要截断而非消失，先检查整行凭据再裁剪", () => {
+  const raw = "FAIL: Error [ERR_MODULE_NOT_FOUND]: " + "long-workspace/".repeat(30);
+  const receipt = JSON.parse(verificationEvent("powershell", "long", raw, true)!.text);
+  assert.equal(receipt.status, "failed");
+  assert.equal(receipt.summaries.length, 1);
+  assert.equal(receipt.summaries[0].length, 180);
+  assert.match(receipt.summaries[0], /^FAIL: Error \[ERR_MODULE_NOT_FOUND\]/);
+  assert(receipt.summaries[0].endsWith("…"));
+  assert.deepEqual(
+    JSON.parse(verificationEvent("powershell", "secret", raw + " token=private", true)!.text)
+      .summaries,
+    [],
+  );
+  assert(!("reportedExitCode" in receipt));
+});
+
 test("WSL混合编码的NUL不吞掉真实验证摘要，也不绕过凭据过滤", () => {
   const raw =
     "w\u0000s\u0000l\u0000: warning\r\u0000\n\u0000PASS: all coding checks\nPASS tok\u0000en=private\n";

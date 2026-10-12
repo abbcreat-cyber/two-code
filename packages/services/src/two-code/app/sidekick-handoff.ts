@@ -27,7 +27,16 @@ export async function readSidekick(
   current: () => void,
 ): Promise<string> {
   current();
-  if (!run.sidekick) throw new Error("本轮尚未派工");
+  if (!run.sidekick) {
+    // 新轮不能继承旧pending，也不能把旧报告冒充新结果；读状态应给出可恢复的历史入口。
+    const last = task.events.findLast((e) => e.role === "lead" && e.kind === "handoff");
+    if (!last)
+      return "状态说明，非副手报告：本轮尚未派工，没有本轮副手报告；尚无历史派工。需要副手执行时先调用sidekick。";
+    const events = task.events.filter((e) => e.seq > last.seq && e.role === "sidekick");
+    const reported = events.some((e) => e.kind === "handoff_report");
+    const receipts = events.filter((e) => e.kind === "verification").length;
+    return `状态说明，非副手报告：本轮尚未派工，没有本轮副手报告。最近一次历史派工#${last.seq}${reported ? "已收到最终报告" : "未取得最终报告，不能视为完成"}，保留${receipts}条原生执行回执。请调用read_handoff_history读取派工、回执及历史报告；需要新执行时再向同一sidekick明确派工，不为确认已有结果自动重跑。`;
+  }
   const pending = run.sidekick;
   const report = await Promise.race([
     pending.then((text) => ({ text })),

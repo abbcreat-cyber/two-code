@@ -1,7 +1,11 @@
 import { createServer, type Server } from "node:http";
 import { randomBytes } from "node:crypto";
 import type { EngineRun } from "../app/ports.js";
-import { handoffToolDescription, sidekickForbiddenTool } from "../domain/handoffs.js";
+import {
+  handoffToolDescription,
+  sidekickForbiddenTool,
+  readSidekickToolDescription,
+} from "../domain/handoffs.js";
 import { permissionDenied } from "./permission-feedback.js";
 import { viewImage, visionDescription } from "./vision.js";
 import { inspectTextFile, textFactsDescription } from "./text-file-facts.js";
@@ -40,7 +44,7 @@ const definitions = [
   },
   {
     name: "read_sidekick",
-    description: "等待并读取本任务副手的真实报告。",
+    description: readSidekickToolDescription,
     inputSchema: { type: "object", properties: {} },
   },
   {
@@ -218,7 +222,7 @@ export default function(pi) {
   };
   pi.on('session_start', nativePowerShell);
   // 用户指定分工必须在动作前提醒；完成后才催派工曾触发主手回滚正确修改再让副手重做。
-  pi.on('before_agent_start', (event) => { editReminder = false; workspaceReminder = false; const ps = nativePowerShell(); return {systemPrompt:event.systemPrompt+'\\n工作区事实（执行器提供）：'+JSON.stringify(process.env.TWO_CODE_WORKSPACE)+ '。配置目录、agent目录、session目录不是工作目录。当前文件直接用相对路径，交接同样沿用相对路径；禁止为确认这些已知事实再搜索目录。'+(process.env.TWO_CODE_HAS_SIDEKICK === '1'?'\\n用户明确指定由副手修改文件或执行命令时，必须在主手调用写入/修改/执行工具之前先用sidekick派工；主手只做用户分配的检查，不能因修改很小而替副手先做。':'')+(ps?'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。':'')}; });
+  pi.on('before_agent_start', (event) => { editReminder = false; workspaceReminder = false; const ps = nativePowerShell(); return {systemPrompt:event.systemPrompt+(ps && process.env.TWO_CODE_NATIVE_BASH?'\\n命令环境事实：本进程PATH已提供Git Bash；bash/run_command使用Bash语法，不是PowerShell或cmd。Windows命令和脚本优先直接使用原生powershell工具；不要混用Shell语法，也不要经Bash包装PowerShell。':'')+'\\n工作区事实（执行器提供）：'+JSON.stringify(process.env.TWO_CODE_WORKSPACE)+ '。配置目录、agent目录、session目录不是工作目录。当前文件直接用相对路径，交接同样沿用相对路径；禁止为确认这些已知事实再搜索目录。'+(process.env.TWO_CODE_HAS_SIDEKICK === '1'?'\\n用户明确指定由副手修改文件或执行命令时，必须在主手调用写入/修改/执行工具之前先用sidekick派工；主手只做用户分配的检查，不能因修改很小而替副手先做。':'')+(ps?'\\nWindows PowerShell 脚本直接使用原生 powershell 工具，command 填原始脚本，不经 Bash/run_command 套 PowerShell。':'')}; });
   pi.on('tool_result', event => {
     // 模型曾把已成功读取的相对文件误认成agent目录文件；在首次结果处补齐路径基准。
     if (!workspaceReminder && !event.isError && process.env.TWO_CODE_WORKSPACE && ['read','read_file','find','find_files','ls','list_directory'].includes(event.toolName)) {
@@ -251,7 +255,7 @@ export default function(pi) {
   if (process.env.TWO_CODE_HAS_HISTORY === '1') pi.registerTool({name:'read_handoff_history',label:'交接历史',description:'读取本任务逐字交接历史，按nextOffset翻页；压缩后按需恢复确切原文。',parameters:Type.Object({offset:Type.Optional(Type.Integer({minimum:0}))}),execute:(id,args,signal)=>call('read_handoff_history',args,signal)});
   if (process.env.TWO_CODE_HAS_SIDEKICK !== '1') return;
   pi.registerTool({name:'sidekick',label:'副手',description:${JSON.stringify(handoffToolDescription)},parameters:Type.Object({message:Type.String(),block:Type.Optional(Type.Boolean())}),execute:(id,args,signal)=>call('sidekick',args,signal)});
-  pi.registerTool({name:'read_sidekick',label:'副手报告',description:'等待并读取本任务副手的报告。',parameters:Type.Object({}),execute:(id,args,signal)=>call('read_sidekick',args,signal)});
+  pi.registerTool({name:'read_sidekick',label:'副手报告',description:${JSON.stringify(readSidekickToolDescription)},parameters:Type.Object({}),execute:(id,args,signal)=>call('read_sidekick',args,signal)});
 }
 `;
 export const stepToolExtension = piToolExtension.replace(

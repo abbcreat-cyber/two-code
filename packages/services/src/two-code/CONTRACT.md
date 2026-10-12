@@ -66,3 +66,5 @@ EngineRun携带本轮mode和usage回执入口。Claude的工具前置钩子、Pi
 ## 本地工具传输
 
 Pi/Step到自有ToolBridge的阻塞交接使用可取消的Node HTTP请求，不应用模型调用之外的隐式响应头短超时，不自动重试派工。Coordinator仍是交接与取消状态的唯一所有者，连接失败不得伪造副手报告。
+
+read_sidekick在本轮未派工时只读事件日志给出状态与历史入口，不创建新报告、不把旧报告计成本轮已读。原生长失败摘要先完整过滤凭据再截断，不能整行丢失。Windows的Pi/Step子进程从已安装Git发现原生Bash，作用域仅限子进程PATH，PowerShell仍走原生工具；详见coordination-findings-followup规格。

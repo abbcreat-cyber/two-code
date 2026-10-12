@@ -9,7 +9,7 @@ if(-not(Test-Path -LiteralPath (Join-Path $target 'closed.json'))){throw '测试
 $closed=Get-Content -LiteralPath (Join-Path $target 'closed.json') -Raw|ConvertFrom-Json
 $report=Join-Path 'D:\Apps\TwoCode\reports' ([IO.Path]::GetFileName($target))
 New-Item -ItemType Directory -Path $report -Force|Out-Null
-Get-ChildItem -LiteralPath $target -File|Where-Object {$_.Name -in @('results.json','initial-results.json','continuations.json','comparison.json','comparison.md','native-browser-evidence.json','native-model-evidence.json','artifacts.json','adjudication.json','ui-result.json','desktop-restart.json','gateway-route-evidence.json','zcode-capabilities.json','native-session-cleanup.json') -or $_.Extension -eq '.png'}|ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $report}
+Get-ChildItem -LiteralPath $target -File|Where-Object {$_.Name -in @('results.json','initial-results.json','followup-results.json','continuations.json','comparison.json','comparison.md','native-browser-evidence.json','native-model-evidence.json','artifacts.json','adjudication.json','ui-result.json','desktop-restart.json','gateway-route-evidence.json','zcode-capabilities.json','native-session-cleanup.json') -or $_.Extension -eq '.png'}|ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $report}
 $tasks=@(Get-ChildItem -LiteralPath (Join-Path $target 'data\tasks') -Filter '*.json'|ForEach-Object {Get-Content -LiteralPath $_.FullName -Raw|ConvertFrom-Json})
 foreach($task in $tasks){
   if($task.status -eq 'running'){throw '测试任务尚未结束'}

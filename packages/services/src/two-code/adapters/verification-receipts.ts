@@ -38,12 +38,13 @@ export function verificationEvent(
     .map((s) => s.trim())
     .filter(
       (s) =>
-        s.length <= 180 &&
         !/(?:api[_ -]?key|token|secret|password|authorization)\s*[:=]/i.test(s) &&
         /^(?:\d+\s+(?:tests?|checks?)\s+(?:passed|failed)\b|(?:PASS|FAIL|OK|WARN|WARNING|ERROR)\b|警告|错误|Tests?:\s|[✔✖ℹ]\s|EXIT(?:CODE)?\s*[:=]|(?:测试|检查|校验).*(?:通过|失败))/i.test(
           s,
         ),
     )
+    // 长工作区路径曾使FAIL整行消失；先对完整行过滤凭据，再限长而不丢失失败事实。
+    .map((s) => (s.length > 180 ? s.slice(0, 179) + "…" : s))
     .slice(-8);
   return {
     kind: "verification",

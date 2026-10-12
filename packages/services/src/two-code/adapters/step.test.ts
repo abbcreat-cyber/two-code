@@ -87,7 +87,11 @@ for (const [label, source] of [
       "Type",
       source!.replace(/import [^\n]+\n/, "").replace("export default function", "return function"),
     );
-    const env = { TWO_CODE_HAS_SIDEKICK: "0", TWO_CODE_WORKSPACE: "D:/fixture" };
+    const env = {
+      TWO_CODE_HAS_SIDEKICK: "0",
+      TWO_CODE_WORKSPACE: "D:/fixture",
+      TWO_CODE_NATIVE_BASH: "D:/Git/bin/bash.exe",
+    };
     factory(
       { platform: "win32", env },
       async () => {
@@ -119,6 +123,8 @@ for (const [label, source] of [
     env.TWO_CODE_HAS_SIDEKICK = "1";
     const prompt = before({ systemPrompt: "original" }).systemPrompt;
     assert(prompt.startsWith("original"));
+    assert.match(prompt, /本进程PATH已提供Git Bash/);
+    assert.match(prompt, /优先直接使用原生powershell/);
     assert.match(prompt, /调用写入\/修改\/执行工具之前先用sidekick派工/);
     assert.equal(result({ toolName: "edit_file", isError: true, content }), undefined);
     const successful = result({ toolName: "edit_file", content });

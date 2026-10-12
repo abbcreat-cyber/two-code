@@ -1,7 +1,7 @@
 import { tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { EngineRun } from "../app/ports.js";
-import { handoffToolDescription } from "../domain/handoffs.js";
+import { handoffToolDescription, readSidekickToolDescription } from "../domain/handoffs.js";
 import { viewImage, visionDescription } from "./vision.js";
 import { inspectTextFile, textFactsDescription } from "./text-file-facts.js";
 import { browserDescription, runBrowserTool } from "./browser.js";
@@ -41,7 +41,7 @@ export function claudeTools(input: EngineRun) {
               content: [{ type: "text" as const, text: await input.handoff!(message, block) }],
             }),
           ),
-          tool("read_sidekick", "等待并读取副手报告。", {}, async () => ({
+          tool("read_sidekick", readSidekickToolDescription, {}, async () => ({
             content: [{ type: "text" as const, text: await input.readSidekick!() }],
           })),
         ]

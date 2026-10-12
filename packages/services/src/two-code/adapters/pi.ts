@@ -14,6 +14,7 @@ import { rejectedToolEvent } from "./tool-outcome.js";
 import { nativeDeltaEvent, nativeToolStart } from "./stream-event.js";
 import { nativeVerificationEvent } from "./verification-receipts.js";
 import { NativeToolProgress } from "./tool-input-progress.js";
+import { nativeWindowsShellEnvironment } from "./native-shell.js";
 
 type Json = Record<string, unknown>;
 const object = (value: unknown): Json =>
@@ -53,6 +54,7 @@ export class PiAdapter implements HarnessAdapter {
     if (!entry) throw new Error(`未找到 ${this.label} CLI，请安装或配置对应底座路径`);
     if (step && (!input.connection || !input.selection.provider))
       throw new Error("请选择Step Code的API或订阅连接，不会回退到其他渠道");
+    const shellEnvironment = await nativeWindowsShellEnvironment();
     await mkdir(input.sessionDir, { recursive: true });
     const promptFile = join(input.sessionDir, "two-code-instructions.txt");
     await writeFile(
@@ -128,6 +130,7 @@ export class PiAdapter implements HarnessAdapter {
         stdio: "pipe",
         env: {
           ...process.env,
+          ...shellEnvironment,
           ELECTRON_RUN_AS_NODE: "1",
           ...toolEnvironment,
           ...connectionEnvironment,
