@@ -18,7 +18,8 @@ function fixture(finish = true) {
     ordinal = 0,
     turns = 0;
   const commands: string[] = [],
-    prepares: string[] = [];
+    prepares: string[] = [],
+    mcpConfigs: any[] = [];
   const publish = (rows: any[]) => {
     state = {
       ...state,
@@ -49,6 +50,7 @@ function fixture(finish = true) {
     initialize: async () => ({ available: true }),
     prepareSessionExecution: async (p: any) => {
       prepares.push(p.sessionId);
+      mcpConfigs.push(p.mcpServers);
     },
     getTaskTokenUsage: async () => ({
       inputTokens: 10,
@@ -71,11 +73,13 @@ function fixture(finish = true) {
     closeSession: async () => true,
     sendConversationCommandV4: async ({ envelope }: any) => {
       commands.push(envelope.type);
-      if (envelope.type === "createSession")
+      if (envelope.type === "createSession") {
+        mcpConfigs.push(envelope.payload.mcpServers);
         return {
           status: "accepted",
           result: { type: "createSession", sessionId: "native-fixture" },
         };
+      }
       if (envelope.type === "sendText") {
         const n = ++turns,
           history = state.rows.window;
@@ -141,7 +145,7 @@ function fixture(finish = true) {
       throw Error("旧消息投影结构已不兼容");
     },
   } as unknown as IZCodeSessionService;
-  return { agent, sessions, commands, prepares, close: () => stream.dispose() };
+  return { agent, sessions, commands, prepares, mcpConfigs, close: () => stream.dispose() };
 }
 function input(events: EngineEvent[], signal = new AbortController().signal): EngineRun {
   return {
@@ -212,6 +216,22 @@ test("关闭后续问保留原会话，通过执行准备恢复，不重放旧�
     "开场。完成。",
   );
 });
+test("阻塞副手的MCP预算在创建与恢复时一致且仅作用于自有服务", async (t) => {
+  const f = fixture();
+  t.after(f.close);
+  const adapter = new ZCodeAdapter(f.agent, f.sessions);
+  t.after(() => adapter.close());
+  const params = { ...input([]), handoff: async () => "完成" };
+  const first = await adapter.run(params);
+  await adapter.run({ ...params, sessionId: first.sessionId });
+  assert.equal(f.mcpConfigs.length, 2);
+  for (const servers of f.mcpConfigs) {
+    assert.equal(servers.length, 1);
+    assert.equal(servers[0].name, "two_code");
+    assert.equal(servers[0].timeoutMs, 30 * 60 * 1000);
+  }
+});
+
 test("取消等待中的ZCode发送stop且不把旧完成状态算作本轮成功", { timeout: 5000 }, async (t) => {
   const f = fixture(false);
   t.after(f.close);

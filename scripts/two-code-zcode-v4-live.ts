@@ -58,6 +58,7 @@ const p = {
 const owned: string[] = [],
   results: any[] = [],
   native: Record<string, unknown> = {};
+const slowHandoff = process.argv.includes("--slow-handoff");
 async function turn(id: string, text: string) {
   await service.submit({ taskId: id, requestId: randomUUID(), text });
   const deadline = Date.now() + 240000;
@@ -87,7 +88,9 @@ async function run(zLead: boolean) {
   try {
     const first = await turn(
       task.id,
-      "这是两次交接验收：主手不得写文件或跑命令。第一步派唯一副手仅用文件工具创建note.txt，内容为ZCODE_V4_OK；收到报告后第二步再派同一个副手读取note.txt并报告内容，不要再次写入。两次交接必须分开，主手最后说明内容。全程不用shell、不联网、不装依赖，不操作其他文件。",
+      slowHandoff
+        ? "这是两次阻塞交接验收：主手不得写文件或跑命令。第一步派唯一副手先用原生PowerShell执行Start-Sleep -Seconds 35，完成后用文件工具创建note.txt，内容为ZCODE_V4_OK。必须使用默认阻塞派工并等待真实报告。收到报告后第二步再派同一个副手只读取note.txt并报告内容，不要再次写入。两次交接必须分开。不联网不安装依赖，不操作其他文件。"
+        : "这是两次交接验收：主手不得写文件或跑命令。第一步派唯一副手仅用文件工具创建note.txt，内容为ZCODE_V4_OK；收到报告后第二步再派同一个副手读取note.txt并报告内容，不要再次写入。两次交接必须分开，主手最后说明内容。全程不用shell、不联网、不装依赖，不操作其他文件。",
     );
     await fs.writeFile(root + "/" + name + "-first.json", JSON.stringify(first, null, 2));
     assert.equal(first.events.filter((e) => e.kind === "handoff").length, 2);
@@ -109,6 +112,18 @@ async function run(zLead: boolean) {
     assert.equal(second.events.filter((e) => e.kind === "handoff_report").length, 3);
     assert.equal(second.permissions.length, 0);
     native[name] = await matrixEvidence(second, agent, root);
+    if (slowHandoff) {
+      const lead = (native[name] as any).lead;
+      assert.equal(lead.toolFailures.length, 0, "长交接不得触发原生工具超时");
+      const begin = first.events.find((e) => e.kind === "handoff")!;
+      const end = first.events.find((e) => e.kind === "handoff_report")!;
+      assert(Date.parse(end.at) - Date.parse(begin.at) >= 35000, "必须真实覆盖超过30秒的等待");
+      assert(
+        lead.tools.some(
+          (tool: any) => tool.toolName === "mcp__two_code__sidekick" && tool.status === "success",
+        ),
+      );
+    }
     results.push({
       name,
       passed: true,
@@ -117,6 +132,7 @@ async function run(zLead: boolean) {
       sessionPreserved: true,
       threeHandoffs: true,
       liveProgress: true,
+      slowHandoff,
     });
   } catch (e) {
     results.push({ name, passed: false, taskId: task.id, error: String(e) });
@@ -129,7 +145,8 @@ async function run(zLead: boolean) {
 }
 console.log(JSON.stringify({ root }));
 try {
-  await Promise.all([run(true), run(false)]);
+  if (slowHandoff) await run(true);
+  else await Promise.all([run(true), run(false)]);
 } finally {
   for (const id of owned)
     if ((await service.read(id)).status === "running") await service.cancel(id);

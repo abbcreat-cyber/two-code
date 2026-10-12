@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { _electron as electron } from "playwright-core";
 
 const root = path.resolve(process.argv[2] ?? "");
+const version = JSON.parse(await fs.readFile("package.json", "utf8")).version;
 assert(/^D:\\Apps\\TwoCode\\qa\\zcode-v4-\d+$/.test(root));
 const ui = root + `/ui-${Date.now()}`;
 const data = ui + "/data",
@@ -58,7 +59,7 @@ const env = {
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({
-  executablePath: "D:/Apps/TwoCode/releases/0.8.27/win-unpacked/Two Code.exe",
+  executablePath: `D:/Apps/TwoCode/releases/${version}/win-unpacked/Two Code.exe`,
   args: ["--disable-gpu"],
   env,
   timeout: 60000,
@@ -110,7 +111,7 @@ try {
   assert.deepEqual(errors, []);
   await fs.writeFile(
     root + "/ui-result.json",
-    JSON.stringify({ passed: true, version: "0.8.27", proof, errors }, null, 2),
+    JSON.stringify({ passed: true, version, proof, errors }, null, 2),
   );
   console.log(JSON.stringify({ passed: true, root, proof }));
 } catch (error) {

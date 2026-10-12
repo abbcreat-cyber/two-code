@@ -49,6 +49,8 @@ export class ZCodeAdapter implements HarnessAdapter {
               value,
             })),
             isolation: "session" as const,
+            // 原生默认30秒会把仍在执行的副手误报为失败；等待报告沿用任务取消边界。
+            timeoutMs: 30 * 60 * 1000,
           },
         ]
       : [];
