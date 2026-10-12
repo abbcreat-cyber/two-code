@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { HarnessConnection } from "../contract.js";
-import { stepConnections } from "./step-connections.js";
+import { stepConnections, stepPlanHarnessConnections } from "./step-connections.js";
 import type { PrivateConnection } from "./connection-types.js";
 export type { PrivateConnection } from "./connection-types.js";
 async function readJson(file: string) {
@@ -58,5 +58,15 @@ export async function nativeConnections(home = homedir()): Promise<PrivateConnec
       models: (config.models ?? []).map((m) => ({ ...m, name: m.name || m.id })),
     });
   }
-  return [...connections, ...(await stepConnections(home))];
+  const step = await stepConnections(home);
+  return [
+    ...connections,
+    ...step,
+    ...stepPlanHarnessConnections(step).filter(
+      (imported) =>
+        !connections.some(
+          (c) => c.harness === imported.harness && c.provider === imported.provider,
+        ),
+    ),
+  ];
 }
