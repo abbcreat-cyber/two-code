@@ -66,4 +66,3 @@ EngineRun携带本轮mode和usage回执入口。Claude的工具前置钩子、Pi
 ## 本地工具传输
 
 Pi/Step到自有ToolBridge的阻塞交接使用可取消的Node HTTP请求，不应用模型调用之外的隐式响应头短超时，不自动重试派工。Coordinator仍是交接与取消状态的唯一所有者，连接失败不得伪造副手报告。
-
