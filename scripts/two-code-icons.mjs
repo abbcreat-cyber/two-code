@@ -1,45 +1,70 @@
-import { chromium } from "playwright-core";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const svg = await fs.readFile(path.join(root, "packages/ui/src/assets/two-code-mark.svg"), "utf8");
-const context = await chromium.launchPersistentContext("D:/Apps/TwoCode/build-cache/icon-browser", {
-  executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  headless: true,
-  viewport: { width: 256, height: 256 },
-  args: ["--disable-gpu"],
-});
-try {
-  const page = await context.newPage(),
-    sizes = [16, 32, 48, 64, 128, 256],
-    pngs = [];
-  for (const size of sizes) {
-    await page.setViewportSize({ width: size, height: size });
-    await page.setContent(
-      `<style>html,body{margin:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${svg}`,
-    );
-    pngs.push(await page.screenshot({ omitBackground: true }));
-  }
-  const header = Buffer.alloc(6 + 16 * sizes.length);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(sizes.length, 4);
-  let offset = header.length;
-  sizes.forEach((size, i) => {
-    const pos = 6 + i * 16;
-    header[pos] = header[pos + 1] = size === 256 ? 0 : size;
-    header.writeUInt16LE(1, pos + 4);
-    header.writeUInt16LE(32, pos + 6);
-    header.writeUInt32LE(pngs[i].length, pos + 8);
-    header.writeUInt32LE(offset, pos + 12);
-    offset += pngs[i].length;
-  });
-  await fs.writeFile(
-    path.join(root, "packages/desktop/build/icon.ico"),
-    Buffer.concat([header, ...pngs]),
-  );
-  await fs.writeFile(path.join(root, "packages/desktop/build/icon_windows.png"), pngs.at(-1));
-  console.log("Two Code PNG/ICO generated in independent headless browser");
-} finally {
-  await context.close();
+import { Resvg } from "@resvg/resvg-js";
+import { Icns, IcnsImage } from "@fiahfy/icns";
+
+const root = path.resolve(import.meta.dirname, "..");
+const source = await fs.readFile(path.join(root, "public/logo/two-code-master.png"));
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024"><image width="1024" height="1024" xlink:href="data:image/png;base64,${source.toString("base64")}"/></svg>`;
+const sizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
+const images = new Map();
+async function save(relative, data) {
+  const target = path.join(root, relative);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, data);
 }
+for (const size of sizes) {
+  const png = new Resvg(svg, { fitTo: { mode: "width", value: size } }).render().asPng();
+  images.set(size, png);
+  await save(`packages/desktop/build/icons/${size}x${size}.png`, png);
+}
+const iconSizes = sizes.filter((size) => size <= 256);
+const header = Buffer.alloc(6 + 16 * iconSizes.length);
+header.writeUInt16LE(1, 2);
+header.writeUInt16LE(iconSizes.length, 4);
+let offset = header.length;
+iconSizes.forEach((size, index) => {
+  const pos = 6 + index * 16;
+  const png = images.get(size);
+  header[pos] = header[pos + 1] = size === 256 ? 0 : size;
+  header.writeUInt16LE(1, pos + 4);
+  header.writeUInt16LE(32, pos + 6);
+  header.writeUInt32LE(png.length, pos + 8);
+  header.writeUInt32LE(offset, pos + 12);
+  offset += png.length;
+});
+const ico = Buffer.concat([header, ...iconSizes.map((size) => images.get(size))]);
+for (const file of [
+  "packages/desktop/build/icon.ico",
+  "packages/desktop/build/icon_installer.ico",
+  "public/logo/icons/icon.ico",
+  "packages/web/public/favicon.ico",
+]) {
+  await save(file, ico);
+}
+const icns = new Icns();
+for (const [size, type] of [
+  [128, "ic07"],
+  [256, "ic08"],
+  [512, "ic09"],
+  [1024, "ic10"],
+]) {
+  icns.append(IcnsImage.fromPNG(images.get(size), type));
+}
+for (const file of [
+  "packages/desktop/build/icon.icns",
+  "packages/desktop/build/icon_installer.icns",
+  "public/logo/icons/icon.icns",
+]) {
+  await save(file, icns.data);
+}
+for (const file of [
+  "packages/desktop/build/icon.png",
+  "packages/desktop/build/icon_installer.png",
+  "packages/ui/src/assets/two-code-mark.png",
+]) {
+  await save(file, images.get(512));
+}
+await save("packages/desktop/build/icon_windows.png", images.get(256));
+await save("public/icon_512@2x.png", images.get(1024));
+console.log("Two Code icons generated from the approved starship master (PNG, ICO, ICNS).");

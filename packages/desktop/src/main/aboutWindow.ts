@@ -1,4 +1,5 @@
 interface CustomAboutDialogHtmlInput {
+  iconDataUrl: string;
   applicationName: string;
   appVersion: string;
   copyright: string;
@@ -102,7 +103,8 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
       }
 
       .app-logo {
-        width: 30px;
+        width: 50px;
+        border-radius: 11px;
         height: auto;
         display: block;
       }
@@ -171,25 +173,7 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
       <section class="about-card" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div class="content">
           <div class="app-icon" aria-hidden="true">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="118"
-              height="100"
-              fill="none"
-              viewBox="0 0 256 218"
-              class="app-logo"
-              focusable="false"
-            >
-              <path
-                fill="currentColor"
-                d="M134.4 0.130152L116.48 25.6022C113.665 29.5699 109.054 32.0019 104.064 32.0019H6.3999V0C6.3999 0.130149 134.4 0.130152 134.4 0.130152Z"
-              />
-              <path fill="currentColor" d="M256 0.130127L102.401 217.732H0L153.599 0.130127H256Z" />
-              <path
-                fill="currentColor"
-                d="M121.601 217.732L139.65 192.134C142.465 188.166 147.076 185.734 152.067 185.734H249.604V217.736H121.601V217.732Z"
-              />
-            </svg>
+            <img src="${escapeHtml(input.iconDataUrl)}" width="50" height="50" class="app-logo" alt="" />
           </div>
           <h1 id="about-title" class="title">
             ${escapeHtml(input.applicationName)}<br />

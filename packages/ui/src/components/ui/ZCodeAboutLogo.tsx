@@ -1,5 +1,5 @@
 import { cn } from "@/components/lib/utils.js";
-import mark from "@/assets/two-code-mark.svg";
+import mark from "@/assets/two-code-mark.png";
 
 /** 保留上游组件接口，展示本分支的独立产品身份。 */
 export function ZCodeAboutLogo({ className }: { className?: string }) {
