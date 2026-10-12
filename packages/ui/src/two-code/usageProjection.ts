@@ -1,8 +1,11 @@
 import type { TwoCodeTask } from "@zcode/services";
 import type { SessionUsageState } from "@zcode/shared/zcode-protocol-v4";
 
-export function projectTwoCodeUsage(task: TwoCodeTask | undefined): SessionUsageState | null {
-  const receipts = task?.usage ?? [];
+export function projectTwoCodeUsage(
+  task: TwoCodeTask | undefined,
+  role?: "lead" | "sidekick",
+): SessionUsageState | null {
+  const receipts = (task?.usage ?? []).filter((receipt) => !role || receipt.role === role);
   if (!task || !receipts.length) return null;
   const cumulative = receipts.reduce(
     (sum, u) => ({
@@ -34,4 +37,24 @@ export function projectTwoCodeUsage(task: TwoCodeTask | undefined): SessionUsage
         : null,
     },
   };
+}
+
+export function projectTwoCodeRoleUsage(task: TwoCodeTask) {
+  return (["lead", "sidekick"] as const).map((role) => {
+    const usage = projectTwoCodeUsage(task, role);
+    const invoked =
+      task[role].status !== "idle" ||
+      task.events.some((event) => event.role === role) ||
+      !!task[role].sessionId;
+    return {
+      role,
+      selection: task[role].selection,
+      usage,
+      state: usage
+        ? ("reported" as const)
+        : invoked
+          ? ("unreported" as const)
+          : ("not-invoked" as const),
+    };
+  });
 }

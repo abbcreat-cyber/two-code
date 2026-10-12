@@ -14,8 +14,7 @@ import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
 import type { SessionPaneProps } from "@/v4/SessionPane.js";
 import { projectTwoCodeRows } from "./conversationProjection.js";
 import { TwoCodeModelControls } from "./TwoCodeModelControls.js";
-import { SessionStatisticsBar } from "@/v4/composer/SessionStatisticsBar.js";
-import { projectTwoCodeUsage } from "./usageProjection.js";
+import { TwoCodeUsageBar } from "./TwoCodeUsageBar.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { useTwoCodeImages } from "@/hooks/useTwoCodeImages.js";
 import { useTwoCodeComposerFeatures } from "@/hooks/useTwoCodeComposerFeatures.js";
@@ -278,7 +277,7 @@ export function TwoCodeSessionPane(props: SessionPaneProps) {
           }
         />
       )}
-      <SessionStatisticsBar usage={projectTwoCodeUsage(task)} />
+      <TwoCodeUsageBar task={task} />
       {task && (
         <div
           className="mt-2 flex justify-end gap-2 text-ui-xs text-foreground-subtlest"

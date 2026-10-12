@@ -24,7 +24,7 @@ import { steerRun } from "./steering.js";
 import { readDefaults, writeDefaults } from "./default-preferences.js";
 import { createTaskMutations } from "./task-mutations.js";
 import { appendEvent, leadInstruction, newTask, sidekickInstruction } from "../domain/task.js";
-const copy = (task: TwoCodeTask): TwoCodeTask => structuredClone(task);
+import { TaskSnapshotPublisher } from "./task-snapshot-publisher.js";
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   private readonly tasks = new Map<string, TwoCodeTask>();
@@ -32,6 +32,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
   private readonly configuring = new Set<string>();
   private readonly mutations: ReturnType<typeof createTaskMutations>;
   private readonly changes = new Emitter<TwoCodeTask>();
+  private readonly publisher = new TaskSnapshotPublisher((snapshot) => this.changes.fire(snapshot));
   private readonly ready: Promise<void>;
   readonly onDidChange = this.changes.event;
   constructor(private readonly deps: CoordinatorDependencies) {
@@ -47,7 +48,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       cached: (id) => this.tasks.get(id),
       publish: (task) => {
         this.tasks.set(task.id, task);
-        this.changes.fire(copy(task));
+        this.publisher.publish(task);
       },
     });
   }
@@ -55,7 +56,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     for (const saved of await this.deps.store.load()) {
       const task = await recoverTask(this.deps, saved);
       this.tasks.set(task.id, task);
-      this.changes.fire(copy(task));
+      this.publisher.publish(task);
     }
   }
   private async task(id: string, leaseHeld = false): Promise<TwoCodeTask> {
@@ -67,7 +68,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
         const recovered = await recoverTask(this.deps, latest, leaseHeld);
         if (canRefresh()) {
           this.tasks.set(id, recovered);
-          if (recovered !== latest) this.changes.fire(copy(recovered));
+          if (recovered !== latest) this.publisher.publish(recovered);
         }
       }
     }
@@ -83,7 +84,8 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     details?: Pick<TaskEvent, "toolCallId" | "notExecuted" | "handoffUserSeq" | "blockId">,
   ) {
     appendEvent(task, { role, kind, text, ...details }, new Date().toISOString());
-    this.changes.fire(copy(task));
+    const streaming = ["message", "reasoning", "tool_input"].includes(kind) && text.length > 0;
+    this.publisher.publish(task, streaming);
   }
   catalog = () => this.deps.catalog();
   preferences = () => readDefaults(this.deps.preferences);
@@ -95,13 +97,13 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       const recovered = await recoverTask(this.deps, latest);
       if (this.active.has(latest.id) || this.configuring.has(latest.id)) continue;
       this.tasks.set(latest.id, recovered);
-      if (recovered !== latest) this.changes.fire(copy(recovered));
+      if (recovered !== latest) this.publisher.publish(recovered);
     }
     const canonical = await this.deps.validateWorkspace(workspacePath);
     return [...this.tasks.values()]
       .filter((task) => task.workspacePath === canonical)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map(copy);
+      .map((task) => structuredClone(task));
   }
   async create(input: CreateTwoCodeTask): Promise<TwoCodeTask> {
     await this.ready;
@@ -113,10 +115,10 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     );
     await this.deps.store.save(task);
     this.tasks.set(task.id, task);
-    this.changes.fire(copy(task));
-    return copy(task);
+    this.publisher.publish(task);
+    return structuredClone(task);
   }
-  read = async (id: string) => copy(await this.task(id));
+  read = async (id: string) => structuredClone(await this.task(id));
   fork: ITwoCodeExecutionService["fork"] = (input) => this.mutations.fork(input);
   configure: ITwoCodeExecutionService["configure"] = (input) => this.mutations.configure(input);
   async submit(input: { taskId: string; requestId: string; text: string }): Promise<TwoCodeTask> {
@@ -133,7 +135,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     if (task.requestIds.includes(input.requestId) || existing?.requestId === input.requestId) {
       await existing?.updateAdmissions?.get(input.requestId);
       await existing?.admission;
-      return copy(task);
+      return structuredClone(task);
     }
     if (existing) {
       if (existing.committing) {
@@ -145,10 +147,10 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
         save: () => this.deps.store.save(task),
         emit: (event) => {
           appendEvent(task, event, new Date().toISOString());
-          this.changes.fire(copy(task));
+          this.publisher.publish(task);
         },
       });
-      return copy(task);
+      return structuredClone(task);
     }
     // 接收锁在首次await前建立，避免同任务并发输入启动两套执行。
     const run: ActiveRun = {
@@ -166,28 +168,27 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       run,
       input.text,
       () => this.current(task, run),
-      () => this.changes.fire(copy(task)),
+      () => this.publisher.publish(task),
     );
     try {
       await run.admission;
     } catch (error) {
       this.active.delete(task.id);
       await run.release?.();
-      this.changes.fire(copy(task));
+      this.publisher.publish(task);
       throw error;
     }
     if (run.duplicate || run.abort.signal.aborted) {
       this.active.delete(task.id);
       await run.release?.();
-      return copy(task);
+      return structuredClone(task);
     }
     run.work = this.runLead(task, run, input.text);
-    return copy(task);
+    return structuredClone(task);
   }
   private current(task: TwoCodeTask, run: ActiveRun): void {
-    if (run.abort.signal.aborted || this.active.get(task.id) !== run) {
+    if (run.abort.signal.aborted || this.active.get(task.id) !== run)
       throw new Error("任务已停止，原生会话上下文保留");
-    }
   }
   private async requestPermission(
     task: TwoCodeTask,
@@ -209,7 +210,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     const id = randomUUID();
     const answer = new Promise<boolean>((resolve) => run.permissions.set(id, resolve));
     task.permissions.push({ id, role, title, detail });
-    this.changes.fire(copy(task));
+    this.publisher.publish(task);
     return answer;
   }
   async respond(input: { taskId: string; permissionId: string; allow: boolean }): Promise<void> {
@@ -220,7 +221,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     run.permissions.delete(input.permissionId);
     task.permissions = task.permissions.filter((request) => request.id !== input.permissionId);
     resolve(input.allow);
-    this.changes.fire(copy(task));
+    this.publisher.publish(task);
   }
   private async execute(
     task: TwoCodeTask,
@@ -261,7 +262,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
             { ...usage, id: usageId, role },
           ];
           await this.deps.store.save(task);
-          this.changes.fire(copy(task));
+          this.publisher.publish(task);
         },
         cwd: task.workspacePath,
         sessionDir: join(this.deps.sessionRoot, task.id, role),
@@ -282,7 +283,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
           if (event.kind === "session") {
             actor.sessionId = event.text;
             await this.deps.store.save(task);
-            this.changes.fire(copy(task));
+            this.publisher.publish(task);
           } else if (event.kind === "model") {
             actor.actualModel = event.text;
             actor.availableTools = event.availableTools;
@@ -361,7 +362,7 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
       task.status = finished.status;
       task.error = finished.error;
       if (this.active.get(task.id) === run) this.active.delete(task.id);
-      this.changes.fire(copy(task));
+      this.publisher.publish(task);
     }
   }
   async cancel(id: string): Promise<TwoCodeTask> {
@@ -369,12 +370,12 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     const run = this.active.get(id);
     if (!run) {
       if (task.status === "running") throw new Error("此任务正在另一窗口执行，请在原窗口停止");
-      return copy(task);
+      return structuredClone(task);
     }
     // 原生执行器已关闭，终态写入中；停止只等待提交，不能把已完成结果改写为取消。
     if (run.committing) {
       await run.work;
-      return copy(task);
+      return structuredClone(task);
     }
     run.abort.abort();
     for (const resolve of run.permissions.values()) resolve(false);
@@ -387,11 +388,12 @@ export class TwoCodeCoordinator implements ITwoCodeExecutionService {
     await run.admission?.catch(() => undefined);
     await Promise.allSettled([...run.actors.values()].map((adapter) => adapter.cancel()));
     await run.work;
-    return copy(task);
+    return structuredClone(task);
   }
   async dispose(): Promise<void> {
     await this.ready;
     await Promise.allSettled([...this.active.keys()].map((id) => this.cancel(id)));
+    this.publisher.dispose();
     this.changes.dispose();
   }
 }

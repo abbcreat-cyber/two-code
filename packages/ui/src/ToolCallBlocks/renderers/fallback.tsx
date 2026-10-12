@@ -5,6 +5,7 @@ import { ToolSnapshotFieldNotice } from "@/ToolCallBlocks/ToolSnapshotFieldNotic
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { ToolLayout } from "../ToolLayout.js";
 import type { ToolCallBlockRenderContext } from "../shared.js";
+import { NativeToolReceipt } from "./native-receipt.js";
 
 const FALLBACK_TOOL_ICON = <WrenchIcon className="size-4 shrink-0 text-foreground-subtle" />;
 
@@ -98,6 +99,8 @@ export function FallbackToolCallBlock(context: FallbackToolCallBlockProps) {
     ],
   );
 
+  if (toolCall.toolId.startsWith("two-code:native:"))
+    return <NativeToolReceipt context={context} draft={draft} />;
   return (
     <ToolLayout
       toolId={toolCall.toolId}

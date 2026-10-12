@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { projectTwoCodeUsage } from "./usageProjection.js";
+import { projectTwoCodeUsage, projectTwoCodeRoleUsage } from "./usageProjection.js";
 import type { TwoCodeTask } from "@zcode/services";
 
 test("sum both roles, keep unknown timings unavailable, do not invent legacy usage", () => {
@@ -40,4 +40,15 @@ test("sum both roles, keep unknown timings unavailable, do not invent legacy usa
   assert.equal(projected.statistics?.tokensPerSecond, 20);
   assert.equal(projected.statistics?.toolMs, null);
   assert.equal(projected.contextWindow, null);
+  const roles = projectTwoCodeRoleUsage(task);
+  assert.equal(roles.length, 2);
+  assert.equal(roles[0]!.usage!.cumulative.inputTokens, 10);
+  assert.equal(roles[1]!.usage!.cumulative.outputTokens, 20);
+  task.usage = task.usage.filter((u) => u.role === "lead");
+  assert.equal(projectTwoCodeRoleUsage(task)[1]!.state, "not-invoked");
+  assert.equal(projectTwoCodeRoleUsage(task)[1]!.usage, null);
+  task.sidekick.sessionId = "invoked-before";
+  assert.equal(projectTwoCodeRoleUsage(task)[1]!.state, "unreported");
+  task.dual = false;
+  assert.equal(projectTwoCodeRoleUsage(task).length, 2);
 });

@@ -28,7 +28,13 @@ function StatisticsRows({ rows }: { rows: string[][] }) {
 }
 
 /** 纯展示：三个独立入口按参考图排序，数字仍只读当前 conversation 的 usage。 */
-export function SessionStatisticsBar({ usage }: { usage: SessionUsageState | null }) {
+export function SessionStatisticsBar({
+  usage,
+  hideTokens = false,
+}: {
+  usage: SessionUsageState | null;
+  hideTokens?: boolean;
+}) {
   const { locale, intl } = useZCodeIntl();
   const zh = locale.startsWith("zh"),
     s = usage?.statistics;
@@ -104,37 +110,39 @@ export function SessionStatisticsBar({ usage }: { usage: SessionUsageState | nul
           <StatisticsRows rows={rows} />
         </PopoverContent>
       </Popover>
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid="session-token-usage-trigger"
-            aria-label={zh ? "查看 Token 用量" : "View token usage"}
-            className={triggerClass}
+      {!hideTokens && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid="session-token-usage-trigger"
+              aria-label={zh ? "查看 Token 用量" : "View token usage"}
+              className={triggerClass}
+            >
+              <Database className="size-3.5" aria-hidden="true" />
+              <span>
+                {tokens(total)} tok · {zh ? "缓存命中" : "Cache hit"} {hitText}
+              </span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            sideOffset={4}
+            className={panelClass}
+            data-testid="session-token-usage-details"
           >
-            <Database className="size-3.5" aria-hidden="true" />
-            <span>
-              {tokens(total)} tok · {zh ? "缓存命中" : "Cache hit"} {hitText}
-            </span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          side="top"
-          align="start"
-          sideOffset={4}
-          className={panelClass}
-          data-testid="session-token-usage-details"
-        >
-          <div className={headerClass}>
-            <span className="flex items-center gap-2 font-medium">
-              <Database className="size-4" aria-hidden="true" />
-              {zh ? "Token 用量" : "Token usage"}
-            </span>
-            <span className="shrink-0 font-semibold tabular-nums">{fullTokens(total)}</span>
-          </div>
-          <StatisticsRows rows={billing} />
-        </PopoverContent>
-      </Popover>
+            <div className={headerClass}>
+              <span className="flex items-center gap-2 font-medium">
+                <Database className="size-4" aria-hidden="true" />
+                {zh ? "Token 用量" : "Token usage"}
+              </span>
+              <span className="shrink-0 font-semibold tabular-nums">{fullTokens(total)}</span>
+            </div>
+            <StatisticsRows rows={billing} />
+          </PopoverContent>
+        </Popover>
+      )}
       <ChatContextUsage taskUsage={taskUsage} intl={intl} locale={locale} selectedProvider="glm" />
     </div>
   );
