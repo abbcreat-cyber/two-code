@@ -95,11 +95,11 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 0;
         border-radius: 12px;
-        background: linear-gradient(180deg, #000000 0%, #151718 100%);
+        background: transparent;
         color: #ffffff;
-        box-shadow: 0 10px 13px -3px rgb(0 0 0 / 0.2), 0 4px 5px -3px rgb(0 0 0 / 0.2);
+        box-shadow: none;
       }
 
       .app-logo {

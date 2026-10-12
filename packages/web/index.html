@@ -119,10 +119,8 @@
         align-items: center;
         justify-content: center;
         border-radius: 24px;
-        background: linear-gradient(180deg, #000000 0%, #151718 100%);
-        box-shadow:
-          0 20px 25px -5px rgb(0 0 0 / 0.2),
-          0 8px 10px -6px rgb(0 0 0 / 0.2);
+        background: transparent;
+        box-shadow: none;
       }
 
       .zcode-boot-loading__logo-shell::before {
@@ -131,7 +129,7 @@
         pointer-events: none;
         content: "";
         /* 启动 logo 壳是固定深色底，边框不能跟随浅色主题 token，否则首屏边框过重。*/
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 0;
         border-radius: inherit;
       }
 

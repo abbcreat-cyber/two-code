@@ -83,13 +83,12 @@ export function OccupationOnboarding({
     loadDeviceMid,
     update,
   });
-  const onboardingVisible = requested || (needsOnboarding === true && !dismissed);
+  // Two Code 跳过自动引导时不能仍把引导标为可见，否则捕获阶段会吞掉其他弹窗的 Esc。
+  const onboardingVisible =
+    Boolean(settings) && (requested || (!skipAutomatic && needsOnboarding === true && !dismissed));
   const captureEnd = useOnboardingTelemetry({
     platform,
-    visible:
-      Boolean(settings) &&
-      onboardingVisible &&
-      (requested || needsOnboarding !== null || Boolean(settings?.onboardingOccupation)),
+    visible: onboardingVisible,
     step,
     occupation,
     mode,

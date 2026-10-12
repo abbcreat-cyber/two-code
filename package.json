@@ -1,6 +1,6 @@
 {
   "name": "zcode",
-  "version": "0.8.31",
+  "version": "0.8.32",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",

@@ -1,5 +1,10 @@
 /** 中文翻译 */
 const zhCN: Record<string, string> = {
+  "localProfile.edit": "修改用户名",
+  "localProfile.title": "你的名字",
+  "localProfile.description": "显示在侧边栏，仅保存在这台电脑。",
+  "localProfile.label": "用户名",
+  "localProfile.saveFailed": "保存失败，请重试。",
   "startPlan.recommendation.subagentDescription":
     "你的体验套餐中，{model} 仍有可用额度，是否将此子智能体的模型切换到体验套餐？",
   "startPlan.recommendation.preferenceSaveFailed": "未能保存“不再提示”，本次仍按你的选择继续。",

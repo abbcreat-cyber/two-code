@@ -35,7 +35,7 @@ export function ZCodeStartupLogoBadge({ animated = true }: { animated?: boolean 
       alt=""
       aria-hidden="true"
       className={cn(
-        "size-24 shrink-0 rounded-3xl shadow-xl/20",
+        "size-24 shrink-0 rounded-3xl",
         animated && "motion-safe:animate-pulse",
       )}
     />

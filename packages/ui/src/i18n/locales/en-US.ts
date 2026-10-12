@@ -1,5 +1,10 @@
 /** English translations */
 const enUS: Record<string, string> = {
+  "localProfile.edit": "Edit display name",
+  "localProfile.title": "Your name",
+  "localProfile.description": "Shown in the sidebar. Saved only on this device.",
+  "localProfile.label": "Display name",
+  "localProfile.saveFailed": "Could not save your name. Please try again.",
   "startPlan.recommendation.subagentDescription":
     "Your Start Plan has quota available for {model}. Switch this subagent’s model to the Start Plan?",
   "startPlan.recommendation.preferenceSaveFailed":
