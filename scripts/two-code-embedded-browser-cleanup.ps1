@@ -1,8 +1,8 @@
 param([Parameter(Mandatory=$true)][string]$Root)
 $ErrorActionPreference='Stop'
 $target=[IO.Path]::GetFullPath($Root).TrimEnd('\')
-if($target -notmatch '^D:\\Apps\\TwoCode\\qa\\(embedded-browser|glm-coordination|role-swap|three-harness|step-plan-harness|four-harness)-\d+$'){throw '不是所属QA目录'}
-$expectedKind=if($target -match '\\four-harness-\d+$'){'two-code-four-harness-qa'}elseif($target -match '\\step-plan-harness-\d+$'){'two-code-step-plan-harness-qa'}elseif($target -match '\\three-harness-\d+$'){'two-code-three-harness-qa'}elseif($target -match '\\role-swap-\d+$'){'two-code-role-swap-qa'}elseif($target -match '\\glm-coordination-\d+$'){'two-code-glm-coordination-qa'}else{'two-code-embedded-browser-qa'}
+if($target -notmatch '^D:\\Apps\\TwoCode\\qa\\(embedded-browser|glm-coordination|role-swap|three-harness|step-plan-harness|four-harness|zcode-v4)-\d+$'){throw '不是所属QA目录'}
+$expectedKind=if($target -match '\\zcode-v4-\d+$'){'two-code-zcode-v4-qa'}elseif($target -match '\\four-harness-\d+$'){'two-code-four-harness-qa'}elseif($target -match '\\step-plan-harness-\d+$'){'two-code-step-plan-harness-qa'}elseif($target -match '\\three-harness-\d+$'){'two-code-three-harness-qa'}elseif($target -match '\\role-swap-\d+$'){'two-code-role-swap-qa'}elseif($target -match '\\glm-coordination-\d+$'){'two-code-glm-coordination-qa'}else{'two-code-embedded-browser-qa'}
 $owner=Get-Content -LiteralPath (Join-Path $target 'owner.json') -Raw|ConvertFrom-Json
 if($owner.kind -ne $expectedKind -or [IO.Path]::GetFullPath($owner.root).TrimEnd('\') -ne $target){throw '所有权不一致'}
 if(-not(Test-Path -LiteralPath (Join-Path $target 'closed.json'))){throw '测试应用未确认关闭'}
