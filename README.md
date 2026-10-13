@@ -3,7 +3,7 @@
 # Two Code
 
 <div align="center">
-  <img src="public/logo/icons/1024x1024.png" alt="Two Code" width="128" height="128" />
+  <img src="packages/desktop/build/icons/1024x1024.png" alt="Two Code" width="128" height="128" />
 </div>
 <!-- TODO: 建议在此补充 1-2 张真实界面截图（任务时间线 + 主/副手 token 用量面板），中英文共用；截图就位后删除本注释。 -->
 <p align="center">
@@ -13,7 +13,7 @@
   简体中文 · <a href="#english">English</a>
 </p>
 
-**Two Code** 是一个跑在 Windows 桌面上的 AI 编码工作台：每个任务默认由两个模型协作完成——**主手（lead）** 负责规划、派工与审查，**副手（sidekick）** 负责实现与验证，两者通过原生交接（handoff）传递简报、补充要求和回执。它基于开源项目 [ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）深度改造：原生界面、任务索引与执行链全部复用，在此之上补齐了双模型协调、分角色用量结算与以原生回执为准的验收。当前版本 **0.8.34**，正处于早期活跃开发阶段。
+**Two Code** 是一个跑在 Windows 桌面上的 AI 编码工作台：每个任务默认由两个模型协作完成——**主手（lead）** 负责规划、派工与审查，**副手（sidekick）** 负责实现与验证，两者通过原生交接（handoff）传递简报、补充要求和回执。原生界面、任务索引与执行链开箱即用，双模型协调、分角色用量结算与以原生回执为准的验收融为一体。当前版本 **0.8.34**，正处于早期活跃开发阶段。
 
 ## 核心特性
 
@@ -23,14 +23,14 @@
 - 交接简报、运行中补充、副手报告与验证回执逐字写入同一任务事件日志，可按字符分页回读，不与主手对话混淆。
 - 运行中的补充要求经原生 steer / interrupt（运行中转向/打断）通道送达等待中的主手；取消后可显式续接，角色会话保留。
 
-### 四套脚手架，自由搭配
+### 四套执行引擎，自由搭配
 
-- 内置四套执行脚手架：**ZCode**（V4 会话帧）、**Claude Code**（官方 Agent SDK/CLI）、**Pi**（原生长驻 RPC）、**Step Code**（本机 step.exe 原生 RPC）。
-- 模型与脚手架是两个独立维度：主副手可以来自不同脚手架、不同模型（验收矩阵覆盖 GLM、DeepSeek、Step-5、GPT-6 等组合）。
+- 内置四套执行引擎：**内置引擎**（随应用自带，V4 会话帧，开箱即用）、**Claude Code**（官方 Agent SDK/CLI）、**Pi**（原生长驻 RPC）、**Step Code**（本机 step.exe 原生 RPC）。
+- 模型与引擎是两个独立维度：主副手可以来自不同引擎、不同模型（验收矩阵覆盖 GLM、DeepSeek、Step-5、GPT-6 等组合）。
 
 ### 原生界面，没有第二套 UI
 
-- 直接复用 ZCode 原生任务索引、侧栏任务行、聊天时间线、输入器、模型选择菜单与权限弹窗。
+- 任务索引、侧栏任务行、聊天时间线、输入器、模型选择菜单与权限弹窗全部原生，直接为双模型协作服务。
 - 0.8.34 起，渲染层直接消费**行级增量**（`row.delta`）：未变化的行保持对象身份；连续正文/思考增量按任务节流合并（最高 10Hz、首段即时），状态、权限、错误与终态立即刷新。
 
 ### 主 / 副手分开的 token 用量面板
@@ -90,21 +90,20 @@ pnpm bundle:desktop -- --os win --arch x64
 
 ## 规格与验收文档
 
-双模型协作的协议边界、性能取舍与真实验收记录集中在 [specs/two-code/](specs/two-code/)（近 40 份规格文档），包括 [多脚手架与双角色](specs/two-code/multi-harness.md)、[原生行增量接入](specs/two-code/native-stream-adaptation.md)、[流式性能与回执](specs/two-code/stream-performance-and-receipts.md)、[会话分叉](specs/two-code/session-fork.md)、[命名组合](specs/two-code/named-combinations.md) 等。核心服务契约见 [packages/services/src/two-code/CONTRACT.md](packages/services/src/two-code/CONTRACT.md)。
+双模型协作的协议边界、性能取舍与真实验收记录集中在 [specs/two-code/](specs/two-code/)（近 40 份规格文档），包括 [多引擎与双角色](specs/two-code/multi-harness.md)、[原生行增量接入](specs/two-code/native-stream-adaptation.md)、[流式性能与回执](specs/two-code/stream-performance-and-receipts.md)、[会话分叉](specs/two-code/session-fork.md)、[命名组合](specs/two-code/named-combinations.md) 等。核心服务契约见 [packages/services/src/two-code/CONTRACT.md](packages/services/src/two-code/CONTRACT.md)。
 
 ## 仓库结构
 
-在上游 ZCode 的 monorepo 结构（`packages/*`、`apps/zcode-cli`）基础上，Two Code 主要新增：
-
 | 目录 | 职责 |
 | --- | --- |
-| `packages/services/src/two-code/` | 双角色协调领域：Coordinator、四套脚手架适配器、组合与设置契约 |
+| `packages/ui/` | 原生桌面界面：任务时间线、输入器、模型选择与用量面板 |
+| `packages/services/src/two-code/` | 双角色协调领域：Coordinator、四套引擎适配器、组合与设置契约 |
+| `packages/desktop/` | Electron 桌面壳：窗口、打包与应用图标 |
 | `specs/two-code/` | 规格与验收文档：协议边界、性能取舍、真实测试记录 |
 
-## 致谢 ZCode 上游
+## 致谢
 
-- Two Code fork 自 [zai-org/ZCode](https://github.com/zai-org/ZCode)（基线：ZCode 3.14.3），并遵循 **Apache-2.0** 许可证。
-- 感谢 ZCode 团队：原生任务索引、聊天时间线、权限体系、Agent CLI 运行时与整套设计系统都被 Two Code 直接复用。上游的社群与发布信息请移步 ZCode 仓库。
+- 感谢开源项目 [ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）：Two Code 的前端界面与工程基础站在它的肩膀上。
 - 第三方组件声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)，项目功能与风险说明见 [NOTICE.md](NOTICE.md)，许可证见 [LICENSE](LICENSE)。
 
 ---
@@ -113,7 +112,7 @@ pnpm bundle:desktop -- --os win --arch x64
 
 # Two Code (English)
 
-**Two Code** is a Windows desktop AI coding workbench built around one idea: two models ship better than one when they truly cooperate. By default, every task is run by a **lead** model that plans, delegates, and reviews, and a **sidekick** model that implements and verifies — connected through native handoffs carrying verbatim briefs, mid-run updates, and receipts. Two Code is a deep fork of the open-source [ZCode](https://github.com/zai-org/ZCode) workbench (Apache-2.0): the native UI, task index, and execution stack are reused as-is, while dual-model coordination, per-role usage accounting, and receipt-grounded verification are built on top. Current version: **0.8.34**, in active early development.
+**Two Code** is a Windows desktop AI coding workbench: by default, every task is run by two cooperating models — a **lead** that plans, delegates, and reviews, and a **sidekick** that implements and verifies — connected through native handoffs carrying verbatim briefs, mid-run updates, and receipts. The native UI, task index, and execution stack come built in, with dual-model coordination, per-role usage accounting, and receipt-grounded verification woven through. Current version: **0.8.34**, in active early development.
 
 ## Highlights
 
@@ -123,14 +122,14 @@ pnpm bundle:desktop -- --os win --arch x64
 - Handoff briefs, mid-run updates, sidekick reports, and verification receipts are stored verbatim in the task's event log and can be paged back through by character — never mixed into the lead's conversation.
 - Mid-run user updates reach a waiting lead through native steer / interrupt channels; after cancellation, sessions can be explicitly resumed with roles intact.
 
-### Four harnesses, mixed freely
+### Four execution engines, mixed freely
 
-- Four execution harnesses are built in: **ZCode** (V4 session frames), **Claude Code** (official Agent SDK/CLI), **Pi** (native long-lived RPC), and **Step Code** (local step.exe native RPC).
-- Model and harness are independent axes: the lead and sidekick can come from different harnesses and different models (the acceptance matrix covers GLM, DeepSeek, Step-5, GPT-6 combinations).
+- Four execution engines are built in: the **bundled engine** (ships with the app, V4 session frames), **Claude Code** (official Agent SDK/CLI), **Pi** (native long-lived RPC), and **Step Code** (local step.exe native RPC).
+- Model and engine are independent axes: the lead and sidekick can come from different engines and different models (the acceptance matrix covers GLM, DeepSeek, Step-5, GPT-6 combinations).
 
 ### Native UI — no second front end
 
-- Reuses ZCode's native task index, sidebar task rows, conversation timeline, prompt editor, model picker, and permission dialogs directly.
+- Task index, sidebar task rows, conversation timeline, prompt editor, model picker, and permission dialogs are all native components, serving dual-model collaboration directly.
 - Since 0.8.34 the renderer consumes **line-level deltas** (`row.delta`): unchanged rows keep object identity; continuous body/thinking increments are coalesced per task (up to 10Hz, first segment immediate), while status, permission, error, and terminal events flush immediately.
 
 ### Separate token usage panels per role
@@ -194,15 +193,14 @@ The protocol boundaries, performance trade-offs, and real acceptance records beh
 
 ## Repository Layout
 
-On top of the upstream ZCode monorepo (`packages/*`, `apps/zcode-cli`), Two Code adds:
-
 | Directory | Responsibility |
 | --- | --- |
-| `packages/services/src/two-code/` | Dual-role coordination domain: the Coordinator, four harness adapters, combination and settings contracts |
+| `packages/ui/` | Native desktop UI: task timeline, prompt editor, model picker, usage panels |
+| `packages/services/src/two-code/` | Dual-role coordination domain: the Coordinator, four engine adapters, combination and settings contracts |
+| `packages/desktop/` | Electron shell: windows, packaging, and the app icon |
 | `specs/two-code/` | Specs and acceptance documents: protocol boundaries, performance trade-offs, real test records |
 
 ## Acknowledgments
 
-- Two Code is forked from [zai-org/ZCode](https://github.com/zai-org/ZCode) (baseline: ZCode 3.14.3) under the **Apache-2.0** license.
-- Many thanks to the ZCode team: the native task index, conversation timeline, permission system, Agent CLI runtime, and the whole design system are reused directly by Two Code. Visit the ZCode repository for its community and releases.
+- Thanks to the open-source [ZCode](https://github.com/zai-org/ZCode) project (Apache-2.0) — Two Code's front-end interface and engineering foundation build on its shoulders.
 - See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for third-party notices, [NOTICE.md](NOTICE.md) for feature and risk statements, and [LICENSE](LICENSE) for the license.
