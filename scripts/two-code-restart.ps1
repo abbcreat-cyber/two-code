@@ -28,11 +28,14 @@ $link.TargetPath=$target
 $link.WorkingDirectory=Split-Path $target -Parent
 $link.IconLocation=$icon+',0'
 $link.Save()
-$runAsNode=[Environment]::GetEnvironmentVariable('ELECTRON_RUN_AS_NODE','Process')
-try {
-  [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE',$null,'Process')
-  $started=Start-Process -FilePath $target -WorkingDirectory (Split-Path $target -Parent) -WindowStyle Normal -PassThru
-} finally {[Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE',$runAsNode,'Process')}
+# Electron 的启动环境必须在创建子进程时冻结，不能修改父环境后立即恢复并交给 Shell 异步启动。
+$launch=[System.Diagnostics.ProcessStartInfo]::new()
+$launch.FileName=$target
+$launch.WorkingDirectory=Split-Path $target -Parent
+$launch.UseShellExecute=$false
+$launch.WindowStyle=[System.Diagnostics.ProcessWindowStyle]::Normal
+$null=$launch.Environment.Remove('ELECTRON_RUN_AS_NODE')
+$started=[System.Diagnostics.Process]::Start($launch)
 Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TwoCodeWindowCheck { [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h); }'
 $deadline=[DateTime]::UtcNow.AddSeconds(30)
 do {
